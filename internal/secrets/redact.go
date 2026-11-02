@@ -12,9 +12,9 @@ const Placeholder = "<rehome:redacted>"
 const minSecretLen = 6
 
 type Finding struct {
-	Path string
-	Key  string
-	Line int
+	Path string `json:"path"`
+	Key  string `json:"key"`
+	Line int    `json:"line"`
 }
 
 var (

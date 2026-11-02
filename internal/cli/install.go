@@ -6,10 +6,10 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/rchehd/rehome/internal/app"
 	"github.com/rchehd/rehome/internal/files"
 	"github.com/rchehd/rehome/internal/install"
 	"github.com/rchehd/rehome/internal/lock"
-	"github.com/rchehd/rehome/internal/platform"
 	"github.com/rchehd/rehome/internal/tui"
 )
 
@@ -29,8 +29,8 @@ func newInstallCmd() *cobra.Command {
 				return errors.New("--all and --missing are mutually exclusive")
 			}
 
-			if !f.yes && !flags.dryRun && !interactive() {
-				return errors.New("use --yes in non-interactive mode")
+			if !f.yes && !flags.dryRun && (flags.json || !interactive()) {
+				return errors.New("use --yes or --dry-run in non-interactive mode")
 			}
 
 			if f.versions != "" && f.versions != install.ModeLatest && f.versions != install.ModeLocked {
@@ -41,6 +41,10 @@ func newInstallCmd() *cobra.Command {
 
 			if err != nil {
 				return err
+			}
+
+			if flags.json {
+				return installJSON(cmd, plan, f)
 			}
 
 			if !f.yes && interactive() {
@@ -129,31 +133,18 @@ func reviewKeptLocal(cmd *cobra.Command, report *install.Report) {
 }
 
 func buildPlan(cmd *cobra.Command, sel install.Selection, f installFlags) (*install.Plan, error) {
-	cfg, root, err := loadConfig(cmd)
+	o := opts(cmd)
+	in, err := app.LoadInstall(o)
 
 	if err != nil {
 		return nil, err
 	}
 
-	p, err := platform.Detect()
-
-	if err != nil {
+	if sel.Mode, err = installMode(f, in.Lock); err != nil {
 		return nil, err
 	}
 
-	lk, err := lock.Load(lock.Path(root, flags.lock))
-
-	if err != nil {
-		return nil, err
-	}
-
-	if sel.Mode, err = installMode(f, lk); err != nil {
-		return nil, err
-	}
-
-	cmd.PrintErrln("checking what is installed …")
-
-	return install.Build(cmd.Context(), newRunner(), cfg, root, p, sel, lk)
+	return app.BuildPlan(cmd.Context(), o, in, sel)
 }
 
 // installMode: the flag wins; with a lock the user picks (locked under --yes); no lock means latest.
@@ -163,7 +154,7 @@ func installMode(f installFlags, lk *lock.Lock) (string, error) {
 		return f.versions, nil
 	case len(lk.Apps) == 0:
 		return install.ModeLatest, nil
-	case f.yes || !interactive():
+	case f.yes || flags.json || !interactive():
 		return install.ModeLocked, nil
 	}
 
@@ -255,4 +246,23 @@ func pinLabel(e lock.Entry) string {
 	}
 
 	return e.Version
+}
+
+// installJSON prints the plan for --dry-run, or runs it (--yes) and prints the report.
+func installJSON(cmd *cobra.Command, plan *install.Plan, f installFlags) error {
+	if flags.dryRun {
+		return report(cmd, app.PlanJSON(plan), "")
+	}
+
+	rep, err := executePlan(cmd, plan, install.Options{OverwriteFiles: f.overwrite, Upgrade: f.upgrade})
+
+	if err != nil {
+		return err
+	}
+
+	if err := report(cmd, rep, ""); err != nil {
+		return err
+	}
+
+	return exitCode(rep)
 }

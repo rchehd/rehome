@@ -1,18 +1,13 @@
 package cli
 
 import (
-	"errors"
-	"os"
 	"path/filepath"
 
 	"github.com/spf13/cobra"
 
-	"github.com/rchehd/rehome/internal/catalog"
+	"github.com/rchehd/rehome/internal/app"
 	"github.com/rchehd/rehome/internal/config"
 	"github.com/rchehd/rehome/internal/files"
-	"github.com/rchehd/rehome/internal/platform"
-	"github.com/rchehd/rehome/internal/scan"
-	"github.com/rchehd/rehome/internal/secrets"
 )
 
 func newScanCmd() *cobra.Command {
@@ -22,10 +17,25 @@ func newScanCmd() *cobra.Command {
 		Use:   "scan",
 		Short: "Detect installed software and settings and update the config",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			plan, err := prepareScan(cmd)
+			plan, err := app.PrepareScan(cmd.Context(), opts(cmd))
 
 			if err != nil {
 				return err
+			}
+
+			if flags.json {
+				written := false
+
+				// Without --yes a JSON scan only reports; an agent writes by asking again with --yes.
+				if yes && !flags.dryRun && plan.Changed() {
+					if err := plan.Write(plan.Result.FileChanges); err != nil {
+						return err
+					}
+
+					written = true
+				}
+
+				return report(cmd, plan.JSON(written), "")
 			}
 
 			printScanSummary(cmd, plan)
@@ -34,13 +44,13 @@ func newScanCmd() *cobra.Command {
 				return nil
 			}
 
-			if !plan.report.Changed() && len(plan.result.FileChanges) == 0 && !plan.lock.changed() {
+			if !plan.Changed() {
 				cmd.Println("config is up to date")
 
 				return nil
 			}
 
-			accepted, ok := confirmChanges(cmd, plan.result.FileChanges, yes)
+			accepted, ok := confirmChanges(cmd, plan.Result.FileChanges, yes)
 
 			if !ok {
 				cmd.Println("nothing written")
@@ -48,7 +58,7 @@ func newScanCmd() *cobra.Command {
 				return nil
 			}
 
-			return plan.write(accepted)
+			return plan.Write(accepted)
 		},
 	}
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "write without asking")
@@ -56,83 +66,14 @@ func newScanCmd() *cobra.Command {
 	return cmd
 }
 
-type scanPlan struct {
-	root     string
-	existing []byte
-	merged   []byte
-	report   config.MergeReport
-	result   *scan.Result
-	lock     *lockPlan
-}
-
-func prepareScan(cmd *cobra.Command) (*scanPlan, error) {
-	p, err := platform.Detect()
-
-	if err != nil {
-		return nil, err
-	}
-
-	cat, err := catalog.Load()
-
-	if err != nil {
-		return nil, err
-	}
-
-	root, err := config.ResolveRoot(flags.config)
-
-	if err != nil {
-		return nil, err
-	}
-
-	existing, err := os.ReadFile(filepath.Join(root, config.FileName))
-
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return nil, err
-	}
-
-	cmd.PrintErrln("scanning " + p.String() + " …")
-	res, err := scan.Run(cmd.Context(), newRunner(), p, cat, root)
-
-	if err != nil {
-		return nil, err
-	}
-
-	merged, report, err := config.Merge(existing, res.Config, p.Key())
-
-	if err != nil {
-		return nil, err
-	}
-
-	// Install specs come from URLs and scripts too; the config file passes the same gate as files/.
-	merged, findings := secrets.Redact(config.FileName, merged)
-	res.Findings = append(res.Findings, findings...)
-
-	sp := &scanPlan{root: root, existing: existing, merged: merged, report: report, result: res}
-	sp.lock, err = prepareLock(cmd, sp, p)
-
-	return sp, err
-}
-
-func (sp *scanPlan) write(changes []files.Change) error {
-	if err := files.WriteChanges(sp.root, changes); err != nil {
-		return err
-	}
-
-	if err := os.WriteFile(filepath.Join(sp.root, config.FileName), sp.merged, 0o644); err != nil {
-		return err
-	}
-
-	return sp.lock.write()
-}
-
-func printScanSummary(cmd *cobra.Command, sp *scanPlan) {
-	r := sp.result
-	cmd.Printf("config: %s\n", filepath.Join(sp.root, config.FileName))
-	rep := sp.report
+func printScanSummary(cmd *cobra.Command, sp *app.ScanPlan) {
+	r := sp.Result
+	cmd.Printf("config: %s\n", filepath.Join(sp.Root, config.FileName))
+	rep := sp.Report
 	cmd.Printf("apps: %d added, %d updated, %d returned, %d missing on scan, %d unchanged\n", len(rep.Added), len(rep.Updated), len(rep.Returned), len(rep.MissingOnScan), len(rep.Unchanged))
 
-	if len(sp.report.MissingOnScan) > 0 {
-		cmd.Printf("  missing on scan: %v\n", sp.report.MissingOnScan)
+	if len(sp.Report.MissingOnScan) > 0 {
+		cmd.Printf("  missing on scan: %v\n", sp.Report.MissingOnScan)
 	}
 
 	if len(r.Unknown) > 0 {
@@ -150,7 +91,7 @@ func printScanSummary(cmd *cobra.Command, sp *scanPlan) {
 	}
 
 	cmd.Printf("settings files: %d new, %d changed\n", newFiles, modified)
-	cmd.Printf("lock: %d versions recorded, %d changed in %s\n", len(sp.lock.current), len(sp.lock.changes), sp.lock.path)
+	cmd.Printf("lock: %d versions recorded, %d changed in %s\n", len(sp.Lock.Current), len(sp.Lock.Changes), sp.Lock.Path)
 
 	for _, f := range r.Findings {
 		cmd.Printf("  redacted secret: %s line %d (%s)\n", f.Path, f.Line, f.Key)

@@ -84,28 +84,3 @@ func linkedSettings() (config.Settings, error) {
 
 	return s, nil
 }
-
-// loadConfig resolves and loads the config, warning when it comes from a URL.
-func loadConfig(cmd *cobra.Command) (*config.Config, string, error) {
-	source, err := config.Resolve(flags.config)
-
-	if err != nil {
-		return nil, "", err
-	}
-
-	if config.IsURL(source) {
-		cmd.PrintErrln("warning: this config is not from your repo; review every script before installing")
-	}
-
-	cfg, root, err := config.Load(source)
-
-	if err != nil {
-		return nil, "", err
-	}
-
-	if errs := cfg.Validate(); len(errs) > 0 {
-		return nil, "", fmt.Errorf("invalid config: %w", errors.Join(errs...))
-	}
-
-	return cfg, root, nil
-}

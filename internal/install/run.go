@@ -28,17 +28,22 @@ type Event struct {
 }
 
 type Outcome struct {
-	ID, Reason, StderrTail string
+	ID         string `json:"id"`
+	Reason     string `json:"reason,omitempty"`
+	StderrTail string `json:"stderr_tail,omitempty"`
 }
 
 type Report struct {
-	Done, Skipped, Failed []Outcome
-	KeptLocal             []files.ApplyResult
-	ManualSecrets         []string
-	Notes                 []string
+	Done          []Outcome           `json:"installed"`
+	Skipped       []Outcome           `json:"skipped"`
+	Failed        []Outcome           `json:"failed"`
+	KeptLocal     []files.ApplyResult `json:"kept_local"`
+	ManualSecrets []string            `json:"fill_in_secrets"`
+	Notes         []string            `json:"notes"`
 	// Upgraded were raised to the lock version; Upgradable could be (rehome install --upgrade).
-	Upgraded, Upgradable []Outcome
-	VersionNotes         []string
+	Upgraded     []Outcome `json:"upgraded"`
+	Upgradable   []Outcome `json:"upgradable"`
+	VersionNotes []string  `json:"version_notes"`
 }
 
 type executor struct {

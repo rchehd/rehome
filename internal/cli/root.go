@@ -1,12 +1,14 @@
 package cli
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 
 	"github.com/spf13/cobra"
 
+	"github.com/rchehd/rehome/internal/app"
 	"github.com/rchehd/rehome/internal/runner"
 )
 
@@ -16,6 +18,7 @@ var Version = "dev"
 type globalFlags struct {
 	config  string
 	lock    string
+	json    bool
 	dryRun  bool
 	verbose bool
 }
@@ -50,10 +53,11 @@ func newRoot() *cobra.Command {
 	pf := root.PersistentFlags()
 	pf.StringVar(&flags.config, "config", "", "config file path or URL")
 	pf.StringVar(&flags.lock, "lock", "", "lock file path (default: rehome.lock next to the config)")
+	pf.BoolVar(&flags.json, "json", false, "print machine-readable JSON (for scripts and agents)")
 	pf.BoolVar(&flags.dryRun, "dry-run", false, "print what would be done without changing anything")
 	pf.BoolVarP(&flags.verbose, "verbose", "v", false, "print every command")
 
-	root.AddCommand(newVersionCmd(), newScanCmd(), newInstallCmd(), newStatusCmd(), newLinkCmd(), newPushCmd(), newPullCmd(), newDebugCmd())
+	root.AddCommand(newVersionCmd(), newScanCmd(), newInstallCmd(), newStatusCmd(), newConfigCmd(), newMCPCmd(), newLinkCmd(), newPushCmd(), newPullCmd(), newDebugCmd())
 
 	return root
 }
@@ -66,6 +70,24 @@ func newVersionCmd() *cobra.Command {
 			cmd.Println("rehome " + Version)
 		},
 	}
+}
+
+func opts(cmd *cobra.Command) app.Options {
+	return app.Options{Config: flags.config, Lock: flags.lock, Runner: newRunner(), Log: cmd.ErrOrStderr()}
+}
+
+// report prints v as JSON under --json, otherwise the text.
+func report(cmd *cobra.Command, v any, text string) error {
+	if !flags.json {
+		cmd.Println(text)
+
+		return nil
+	}
+
+	enc := json.NewEncoder(cmd.OutOrStdout())
+	enc.SetIndent("", "  ")
+
+	return enc.Encode(v)
 }
 
 func newRunner() *runner.Runner {

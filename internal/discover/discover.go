@@ -15,7 +15,10 @@ const maxAppBytes = 10 << 20
 
 // Warning is something scan could not take by itself, with what the user should do.
 type Warning struct {
-	ID, Path, Reason, Action string
+	ID     string `json:"id,omitempty"`
+	Path   string `json:"path"`
+	Reason string `json:"reason"`
+	Action string `json:"action"`
 }
 
 // Excludes keeps caches, logs, state, databases and VCS data out of auto rules.

@@ -57,6 +57,14 @@ as_dev "./rehome install --yes --upgrade --config cfg" > /tmp/run4.log 2>&1
 check "--upgrade raises it to the lock version" '[ "$(cowsay_version)" = "1.6.0" ]'
 check "an older lock never downgrades" 'sed -i "s/version: 1.6.0/version: 1.5.0/" $home/cfg/rehome.lock && as_dev "./rehome install --yes --versions locked --config cfg" >/dev/null 2>&1; [ "$(cowsay_version)" = "1.6.0" ]'
 
+echo "== agent interface"
+as_dev "./rehome config add-install jq --apt jq --group tools --config cfg" > /tmp/agent.log 2>&1
+check "config add-install edits the config" 'grep -q "id: jq" $home/cfg/rehome.yml'
+as_dev "./rehome status --json --config cfg" > /tmp/status.json 2>/dev/null
+check "status --json lists the new app as missing" 'grep -q "\"clean\": false" /tmp/status.json && grep -A5 "\"missing\"" /tmp/status.json | grep -q "\"jq\""'
+as_dev "./rehome install --dry-run --json --config cfg" > /tmp/plan.json 2>/dev/null
+check "install --dry-run --json returns the command for a person" 'grep -q "\"run_as\"" /tmp/plan.json'
+
 echo "== scan"
 as_dev "mkdir -p .config/mc .config/mystery && printf '[Midnight-Commander]\nskin=dark\n' > .config/mc/ini && echo '{}' > .config/mystery/settings.json"
 as_dev "mkdir -p scanned && ./rehome scan --yes --config scanned" > /tmp/scan.log 2>&1
