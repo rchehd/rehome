@@ -6,7 +6,7 @@ Move your whole workstation to a new machine.
 generates a portable config. On a fresh machine, feed it the same config and it installs everything from scratch
 or fills in whatever is missing, picking the right package manager for the detected OS.
 
-> Status: Phase 1 (Ubuntu / Debian) works. No release yet — build from source.
+> Supports Ubuntu and Debian. No release yet — build from source.
 
 ## Install
 
@@ -65,14 +65,6 @@ test/e2e/run.sh ubuntu:24.04 ubuntu:22.04 debian:12
 
 Installs a fixture config twice in clean containers and scans the result; CI runs the same on every push.
 Snap and flatpak need systemd, so they are not covered in containers.
-
-## Roadmap
-
-1. Ubuntu / Debian
-2. Versions and `rehome.lock`: reinstall the exact versions or the latest, never downgrade
-3. macOS (Homebrew), with installers mapped between Ubuntu and macOS automatically
-4. Secrets via Bitwarden
-5. Fedora, Arch
 
 ## License
 
