@@ -2,22 +2,26 @@
   group: browsers
   install:
     debian: { apt: google-chrome-stable, repo: google-chrome }
+    macos: { cask: google-chrome }
   detect: { packages: [google-chrome-stable] }
 
 - id: firefox
   group: browsers
   install:
     debian: { snap: firefox }
+    macos: { cask: firefox }
   detect: { packages: [firefox] }
 
 - id: bitwarden
   group: security
   install:
     debian: { snap: bitwarden }
+    macos: { cask: bitwarden }
   detect: { packages: [bitwarden] }
 
 - id: telegram-desktop
   group: messengers
   install:
     debian: { snap: telegram-desktop }
+    macos: { cask: telegram }
   detect: { packages: [telegram-desktop] }

@@ -18,6 +18,7 @@ jobs:
       - run: go vet ./...
       - run: test -z "$(gofmt -l .)"
       - run: go test ./... -count=1
+      - run: GOOS=darwin go build ./... && GOOS=darwin go vet ./...
 
   e2e:
     needs: build
@@ -32,3 +33,13 @@ jobs:
         with:
           go-version-file: go.mod
       - run: test/e2e/run.sh "${{ matrix.image }}"
+
+  e2e-macos:
+    needs: build
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: test/e2e/macos.sh

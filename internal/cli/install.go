@@ -14,8 +14,8 @@ import (
 )
 
 type installFlags struct {
-	all, missing, yes, overwrite, upgrade bool
-	versions                              string
+	all, missing, yes, overwrite, upgrade, offline bool
+	versions                                       string
 }
 
 func newInstallCmd() *cobra.Command {
@@ -37,7 +37,7 @@ func newInstallCmd() *cobra.Command {
 				return errors.New("--versions must be latest or locked")
 			}
 
-			plan, err := buildPlan(cmd, install.Selection{All: f.all}, f)
+			plan, err := buildPlan(cmd, install.Selection{All: f.all, Offline: f.offline}, f)
 
 			if err != nil {
 				return err
@@ -64,6 +64,7 @@ func newInstallCmd() *cobra.Command {
 	fl.BoolVar(&f.overwrite, "overwrite-files", false, "replace differing settings files (keeps .rehome.bak)")
 	fl.StringVar(&f.versions, "versions", "", "latest, or locked to install the versions from rehome.lock (default: locked when a lock exists)")
 	fl.BoolVar(&f.upgrade, "upgrade", false, "upgrade installed apps that are older than the lock")
+	fl.BoolVar(&f.offline, "offline", false, "map installers between OSes from local package indexes only (no Homebrew API, no Repology)")
 
 	return cmd
 }
@@ -186,6 +187,10 @@ func printPlan(cmd *cobra.Command, plan *install.Plan) {
 
 			if s.Pin != (lock.Entry{}) {
 				version = " @" + pinLabel(s.Pin)
+			}
+
+			if s.Mapped != "" {
+				version += " (auto-mapped: " + s.Mapped + ")"
 			}
 
 			cmd.Printf("  + %-28s %s %s%s\n", s.App.ID, name, pkg, version)

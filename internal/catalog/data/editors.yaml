@@ -2,6 +2,7 @@
   group: editors
   install:
     debian: { snap: sublime-text, classic: true }
+    macos: { cask: sublime-text }
   detect: { packages: [sublime-text] }
   files:
     linux:
@@ -24,6 +25,7 @@
         cp -r "$tmp"/jetbrains-toolbox-*/bin/* ~/.local/share/JetBrains/Toolbox/bin/ &&
         rm -rf "$tmp"
       bin: ~/.local/share/JetBrains/Toolbox/bin/jetbrains-toolbox
+    macos: { cask: jetbrains-toolbox }
   # Toolbox may run from anywhere; its data dir proves it is in use.
   detect: { path: ~/.local/share/JetBrains/Toolbox/apps }
   files:
@@ -35,6 +37,7 @@
   group: editors
   install:
     debian: { script: curl -fsSL https://zed.dev/install.sh | sh, bin: zed }
+    macos: { cask: zed }
   detect: { path: ~/.local/zed.app/bin/zed, bins: [zed] }
   files:
     linux: { base: ~/.config/zed, include: [settings.json, keymap.json, themes/**] }
@@ -43,6 +46,7 @@
   group: editors
   install:
     debian: { apt: cursor, repo: cursor }
+    macos: { cask: cursor }
   detect: { packages: [cursor], bins: [cursor] }
   files:
     linux: { base: ~/.config/Cursor/User, include: [settings.json, keybindings.json, snippets/**] }

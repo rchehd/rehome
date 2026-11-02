@@ -102,6 +102,7 @@ var (
 	// Package names reach shell commands; a config from a URL must not smuggle code into them.
 	pkgName  = regexp.MustCompile(`^[A-Za-z0-9@][\w@.+/:=~-]*$`)
 	pkgArgs  = regexp.MustCompile("^[A-Za-z0-9@.][^;&|$`<>(){}'\"\\\\\n]*$")
+	masID    = regexp.MustCompile(`^[0-9]+$`)
 	plainURL = regexp.MustCompile(`^https://[^\s'"\\` + "`" + `]+$`)
 )
 
@@ -121,6 +122,10 @@ func unsafeFields(where string, s InstallSpec) []error {
 	check("go", s.GoPkg, pkgName)
 	check("channel", s.Channel, pkgName)
 	check("remote", s.Remote, pkgName)
+	check("brew", s.Brew, pkgName)
+	check("cask", s.Cask, pkgName)
+	check("tap", s.Tap, pkgName)
+	check("mas", s.Mas, masID)
 	check("pipx", s.Pipx, pkgArgs)
 	check("uv_tool", s.UvTool, pkgArgs)
 	check("deb_url", s.DebURL, plainURL)

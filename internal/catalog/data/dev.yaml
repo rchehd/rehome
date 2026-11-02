@@ -2,6 +2,7 @@
   group: dev
   install:
     debian: { apt: git }
+    macos: { brew: git }
   detect: { packages: [git, git-all] }
   files:
     linux: &gitfiles { base: "~", include: [.gitconfig, .gitignore_global, .config/git/**], exclude: [.config/git/credentials] }
@@ -11,6 +12,7 @@
   group: dev
   install:
     debian: { apt: gh, repo: github-cli }
+    macos: { brew: gh }
   detect: { packages: [gh] }
   files:
     linux: &ghfiles { base: ~/.config/gh, include: [config.yml] }
@@ -20,6 +22,7 @@
   group: dev
   install:
     debian: { apt: docker-ce, repo: docker }
+    macos: { cask: docker-desktop }
   detect: { packages: [docker-ce] }
   post_install:
     - sudo usermod -aG docker "$USER"
@@ -46,6 +49,7 @@
         curl -fsSL "https://go.dev/dl/$(curl -fsSL 'https://go.dev/VERSION?m=text' | head -1).linux-$(dpkg --print-architecture).tar.gz" |
         sudo tar -C /usr/local -xz
       bin: /usr/local/go/bin/go
+    macos: { brew: go }
   detect: { path: /usr/local/go/bin/go, packages: [golang] }
 
 - id: rustup
@@ -58,6 +62,7 @@
   group: runtimes
   install:
     debian: { apt: pipx }
+    macos: { brew: pipx }
   detect: { packages: [pipx] }
 
 - id: composer
@@ -69,4 +74,5 @@
         curl -fsSL https://getcomposer.org/installer -o "$tmp" &&
         sudo php "$tmp" --install-dir=/usr/local/bin --filename=composer
       bin: composer
+    macos: { brew: composer }
   detect: { bins: [composer] }

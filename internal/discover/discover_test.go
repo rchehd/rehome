@@ -128,3 +128,15 @@ func TestClaimedNeverClaimsHome(t *testing.T) {
 		t.Error("unrelated dir counted as covered")
 	}
 }
+
+func TestForAppMacApplicationSupport(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	put(t, home, "Library/Application Support/Rectangle/config.json", 100)
+
+	rule, _ := ForApp("rectangle", []string{"rectangle"}, nil)
+
+	if rule == nil || !slices.Contains(rule.Include, "Library/Application Support/Rectangle/**") {
+		t.Errorf("rule = %+v", rule)
+	}
+}

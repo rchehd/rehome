@@ -2,6 +2,7 @@
   group: shell
   install:
     debian: { apt: zsh }
+    macos: { brew: zsh }
   detect: { packages: [zsh] }
   files:
     linux: &zshfiles { base: "~", include: [.zshrc, .zshenv, .zprofile, .p10k.zsh] }
@@ -26,7 +27,7 @@
 
 - id: fonts
   group: shell
-  detect: { path: ~/.local/share/fonts/* }
+  detect: { path: ~/.local/share/fonts/*, paths: [~/Library/Fonts/*] }
   files:
     linux: { base: ~/.local/share/fonts, include: ["**"], exclude: ["**/.uuid"], max_size_mb: 20 }
     macos: { base: ~/Library/Fonts, include: ["**"], exclude: ["**/.uuid"], max_size_mb: 20 }
@@ -37,6 +38,7 @@
   group: shell
   install:
     debian: { apt: tmux }
+    macos: { brew: tmux }
   detect: { packages: [tmux] }
   files:
     linux: &tmuxfiles { base: "~", include: [.tmux.conf, .config/tmux/**] }
@@ -46,12 +48,14 @@
   group: terminals
   install:
     debian: { apt: kitty }
+    macos: { cask: kitty }
   detect: { packages: [kitty] }
   files:
     linux: { base: ~/.config/kitty, include: ["**"] }
 
 - id: terminator
   group: terminals
+  skip: [macos]
   install:
     debian: { apt: terminator }
   detect: { packages: [terminator] }
@@ -62,6 +66,7 @@
   group: terminals
   install:
     debian: { snap: ghostty, classic: true }
+    macos: { cask: ghostty }
   detect: { packages: [ghostty] }
   files:
     linux: { base: ~/.config/ghostty, include: ["**"] }

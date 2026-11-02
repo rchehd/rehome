@@ -1,6 +1,9 @@
 package catalog
 
 import (
+	"os"
+	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -153,5 +156,41 @@ func TestEntryRule(t *testing.T) {
 
 	if _, ok := e.Rule("macos"); ok {
 		t.Error("rule without base should not count")
+	}
+}
+
+func TestEveryDebianEntryHasAMacOSAnswer(t *testing.T) {
+	cat, err := Load()
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, e := range cat.Entries {
+		_, debian := e.Install["debian"]
+		_, macos := e.Install["macos"]
+		_, any := e.Install["any"]
+
+		if debian && !macos && !any && !slices.Contains(e.Skip, "macos") {
+			t.Errorf("%s: has install.debian but no install.macos, install.any or skip: [macos]", e.ID)
+		}
+	}
+}
+
+func TestPresentChecksExtraPaths(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	os.MkdirAll(filepath.Join(home, "Library/Fonts"), 0o755)
+	os.WriteFile(filepath.Join(home, "Library/Fonts/Hack.ttf"), []byte("font"), 0o644)
+	cat, _ := Load()
+
+	found := false
+
+	for _, e := range cat.Present("macos") {
+		found = found || e.ID == "fonts"
+	}
+
+	if !found {
+		t.Error("fonts in ~/Library/Fonts not detected")
 	}
 }

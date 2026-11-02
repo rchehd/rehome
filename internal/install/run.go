@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/rchehd/rehome/internal/adapter"
 	"github.com/rchehd/rehome/internal/adapter/apt"
 	"github.com/rchehd/rehome/internal/ai"
 	"github.com/rchehd/rehome/internal/config"
@@ -79,6 +80,7 @@ func Execute(ctx context.Context, r *runner.Runner, plan *Plan, opts Options, pr
 	}
 
 	x.recordBroken()
+	x.prepareBrew()
 	failedRepos := x.prepareApt(missing)
 	x.installAll(failedRepos)
 	x.upgrade()
@@ -106,7 +108,7 @@ func (x *executor) missingPrerequisites() []string {
 }
 
 func (x *executor) needsSudo(missing []string) bool {
-	if len(missing) > 0 || len(x.usedRepos()) > 0 {
+	if len(missing) > 0 || len(x.usedRepos()) > 0 || x.needsBrew() {
 		return true
 	}
 
@@ -504,4 +506,33 @@ func (x *executor) fail(id, reason string, err error) {
 	}
 
 	x.report.Failed = append(x.report.Failed, o)
+}
+
+const brewInstaller = `NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"`
+
+// needsBrew: on macOS any brew or cask step needs Homebrew itself first.
+func (x *executor) needsBrew() bool {
+	if x.plan.Platform.OS != "darwin" || adapter.HasCmd("brew") {
+		return false
+	}
+
+	for _, s := range x.plan.Steps {
+		if s.Status == StatusInstall && (s.Spec.Brew != "" || s.Spec.Cask != "") {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (x *executor) prepareBrew() {
+	if !x.needsBrew() {
+		return
+	}
+
+	x.progress(Event{Phase: "Homebrew"})
+
+	if _, err := x.r.Run(x.ctx, runner.Cmd{Shell: brewInstaller}); err != nil {
+		x.note("installing Homebrew failed: %v", err)
+	}
 }

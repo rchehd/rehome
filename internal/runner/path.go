@@ -8,7 +8,7 @@ import (
 )
 
 // User bin dirs that installers in this same run populate before the shell's PATH knows them.
-var extraDirs = []string{"~/.local/bin", "~/.cargo/bin", "~/go/bin", "/usr/local/go/bin", "/snap/bin"}
+var extraDirs = []string{"~/.local/bin", "~/.cargo/bin", "~/go/bin", "/usr/local/go/bin", "/snap/bin", "/opt/homebrew/bin", "/opt/homebrew/sbin", "/usr/local/bin"}
 
 // SearchPath is PATH plus the user bin dirs that are missing from it.
 func SearchPath() string {
