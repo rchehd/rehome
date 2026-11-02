@@ -2,6 +2,8 @@ package snap
 
 import (
 	"context"
+	"errors"
+	"os"
 	"regexp"
 	"strings"
 
@@ -10,6 +12,8 @@ import (
 	"github.com/rchehd/rehome/internal/platform"
 	"github.com/rchehd/rehome/internal/runner"
 )
+
+const snapdSocket = "/run/snapd.socket"
 
 // System snaps: bases, runtimes, themes and what Ubuntu preinstalls.
 var system = regexp.MustCompile(`^(core\d*|bare|snapd.*|gnome-\d.*|gtk-common-themes|mesa-\d+|kf\d+-.*|snap-store|firmware-updater)$`)
@@ -56,12 +60,20 @@ func (Snap) Scan(ctx context.Context, r *runner.Runner) ([]adapter.Detected, err
 }
 
 func (Snap) Installed(ctx context.Context, r *runner.Runner, s config.InstallSpec) (bool, error) {
+	if !running() {
+		return false, nil
+	}
+
 	_, err := r.Output(ctx, runner.Cmd{Name: "snap", Args: []string{"list", s.Snap}})
 
 	return err == nil, nil
 }
 
 func (Snap) Install(ctx context.Context, r *runner.Runner, s config.InstallSpec) error {
+	if !running() && !r.DryRun {
+		return errors.New("snapd is not running (containers and minimal systems have no snapd)")
+	}
+
 	args := []string{"install", s.Snap}
 
 	if s.Classic {
@@ -75,4 +87,11 @@ func (Snap) Install(ctx context.Context, r *runner.Runner, s config.InstallSpec)
 	_, err := r.Run(ctx, runner.Cmd{Name: "snap", Args: args, Sudo: true})
 
 	return err
+}
+
+// running avoids the client's long timeout when snapd is absent.
+func running() bool {
+	_, err := os.Stat(snapdSocket)
+
+	return err == nil
 }

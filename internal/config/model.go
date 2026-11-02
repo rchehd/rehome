@@ -8,10 +8,12 @@ const (
 )
 
 type Config struct {
-	Version  int                  `yaml:"version"`
-	Apps     []App                `yaml:"apps"`
-	AptRepos map[string]AptRepo   `yaml:"apt_repos,omitempty"`
-	Files    map[string][]FileMap `yaml:"files,omitempty"`
+	Version  int                `yaml:"version"`
+	Apps     []App              `yaml:"apps"`
+	AptRepos map[string]AptRepo `yaml:"apt_repos,omitempty"`
+	// AptKeys are legacy keys for /etc/apt/trusted.gpg.d, used by repos without signed-by.
+	AptKeys []string             `yaml:"apt_keys,omitempty"`
+	Files   map[string][]FileMap `yaml:"files,omitempty"`
 }
 
 type App struct {
@@ -50,8 +52,19 @@ type InstallSpec struct {
 }
 
 type AptRepo struct {
-	Source  string `yaml:"source"`
-	Keyring string `yaml:"keyring,omitempty"`
+	Source   string   `yaml:"source"`
+	Keyring  string   `yaml:"keyring,omitempty"`
+	Keyrings []string `yaml:"keyrings,omitempty"`
+	// Release is the codename the source was captured on; only it is swapped for the target's.
+	Release string `yaml:"release,omitempty"`
+}
+
+func (r AptRepo) AllKeyrings() []string {
+	if r.Keyring == "" {
+		return r.Keyrings
+	}
+
+	return append([]string{r.Keyring}, r.Keyrings...)
 }
 
 type FileMap struct {

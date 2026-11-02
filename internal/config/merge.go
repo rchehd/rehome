@@ -60,6 +60,15 @@ func Merge(existing []byte, scanned *Config, platformKey string) ([]byte, MergeR
 		return nil, report, err
 	}
 
+	reposUpdated, err := completeRepos(root, scanned.AptRepos)
+
+	if err != nil {
+		return nil, report, err
+	}
+
+	keysChanged := mergeList(root, "apt_keys", scanned.AptKeys)
+	reposChanged = reposChanged || reposUpdated || keysChanged
+
 	filesChanged, err := mergeFiles(root, scanned.Files)
 
 	if err != nil {
@@ -236,6 +245,71 @@ func mergeMap[V any](root *yaml.Node, key string, scanned map[string]V) (bool, e
 	}
 
 	return changed, nil
+}
+
+// completeRepos adds a missing release or keyrings to repo entries made by older scans.
+func completeRepos(root *yaml.Node, scanned map[string]AptRepo) (bool, error) {
+	repos := child(root, "apt_repos")
+	changed := false
+
+	for _, name := range sortedKeys(scanned) {
+		node := child(repos, name)
+
+		if node == nil || node.Kind != yaml.MappingNode {
+			continue
+		}
+
+		s := scanned[name]
+
+		if s.Release != "" && child(node, "release") == nil {
+			setChild(node, "release", &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: s.Release})
+			changed = true
+		}
+
+		if len(s.Keyrings) > 0 && child(node, "keyring") == nil && child(node, "keyrings") == nil {
+			var v yaml.Node
+
+			if err := v.Encode(s.Keyrings); err != nil {
+				return false, err
+			}
+
+			v.Style = yaml.FlowStyle
+			setChild(node, "keyrings", &v)
+			changed = true
+		}
+	}
+
+	return changed, nil
+}
+
+func mergeList(root *yaml.Node, key string, scanned []string) bool {
+	if len(scanned) == 0 {
+		return false
+	}
+
+	seq := child(root, key)
+
+	if seq == nil {
+		seq = &yaml.Node{Kind: yaml.SequenceNode, Tag: "!!seq"}
+		setChild(root, key, seq)
+	}
+
+	have := map[string]bool{}
+
+	for _, item := range seq.Content {
+		have[item.Value] = true
+	}
+
+	changed := false
+
+	for _, v := range scanned {
+		if !have[v] {
+			seq.Content = append(seq.Content, &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: v})
+			changed = true
+		}
+	}
+
+	return changed
 }
 
 func mergeFiles(root *yaml.Node, scanned map[string][]FileMap) (bool, error) {

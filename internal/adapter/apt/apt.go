@@ -71,6 +71,14 @@ func (Apt) Scan(ctx context.Context, r *runner.Runner) ([]adapter.Detected, erro
 	found := make([]adapter.Detected, 0, len(pkgs))
 
 	for _, p := range pkgs {
+		// A .deb installed by hand has no repo to reinstall from; the catalog may know a URL.
+		if origins[p] == dpkgOnly {
+			meta := map[string]string{"package": p, "origin": "installed from a .deb file; add install.debian.deb_url"}
+			found = append(found, adapter.Detected{Manager: "unknown", Name: p, Meta: meta})
+
+			continue
+		}
+
 		d := adapter.Detected{Manager: "apt", Name: p, Spec: config.InstallSpec{Apt: p}, Meta: map[string]string{"origin": origins[p]}}
 		d.Spec.Repo = repos.NameFor(origins[p])
 		found = append(found, d)
@@ -111,6 +119,37 @@ func (Apt) Install(ctx context.Context, r *runner.Runner, s config.InstallSpec) 
 // AptGet builds a non-interactive `sudo apt-get` command.
 func AptGet(args ...string) runner.Cmd {
 	return runner.Cmd{Name: "env", Args: append([]string{"DEBIAN_FRONTEND=noninteractive", "apt-get"}, args...), Sudo: true}
+}
+
+// Unavailable returns the packages apt has no installation candidate for.
+func Unavailable(ctx context.Context, r *runner.Runner, pkgs []string) ([]string, error) {
+	out, err := r.Output(ctx, runner.Cmd{Name: "apt-cache", Args: append([]string{"policy", "--"}, pkgs...)})
+
+	if err != nil {
+		return nil, err
+	}
+
+	candidate := map[string]bool{}
+	var pkg string
+
+	for _, l := range strings.Split(out, "\n") {
+		switch {
+		case l != "" && l[0] != ' ':
+			pkg = strings.TrimSuffix(strings.TrimSpace(l), ":")
+		case strings.HasPrefix(strings.TrimSpace(l), "Candidate:"):
+			candidate[pkg] = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(l), "Candidate:")) != "(none)"
+		}
+	}
+
+	var missing []string
+
+	for _, p := range pkgs {
+		if !candidate[p] {
+			missing = append(missing, p)
+		}
+	}
+
+	return missing, nil
 }
 
 // Origins maps each package to the archive URI its installed version came from, or dpkg-only.

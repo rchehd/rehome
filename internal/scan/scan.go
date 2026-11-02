@@ -79,7 +79,8 @@ func Run(ctx context.Context, r *runner.Runner, p platform.Platform, cat *catalo
 		return nil, err
 	}
 
-	s.res.Config = &config.Config{Version: config.CurrentVersion, Apps: s.sortedApps(), AptRepos: s.res.Config.AptRepos, Files: s.res.Config.Files}
+	cfg := s.res.Config
+	s.res.Config = &config.Config{Version: config.CurrentVersion, Apps: s.sortedApps(), AptRepos: cfg.AptRepos, AptKeys: cfg.AptKeys, Files: cfg.Files}
 
 	return s.res, nil
 }
@@ -178,26 +179,29 @@ func (s *scanner) captureRepos() error {
 		return nil
 	}
 
-	repos, copies, err := apt.CaptureRepos(used)
+	capture, err := apt.CaptureRepos(used, s.p.Codename)
 
 	if err != nil {
 		return err
 	}
 
-	s.res.Config.AptRepos = repos
+	s.res.Config.AptRepos = capture.Repos
+	s.res.Config.AptKeys = capture.Keys
+	s.res.Warnings = append(s.res.Warnings, capture.Warnings...)
 
 	for _, a := range s.apps {
-		if spec, ok := a.Install[s.p.Key()]; ok && spec.Repo != "" && repos[spec.Repo].Source == "" {
+		if spec, ok := a.Install[s.p.Key()]; ok && spec.Repo != "" && capture.Repos[spec.Repo].Source == "" {
 			spec.Repo = ""
 			a.Install[s.p.Key()] = spec
 		}
 	}
 
-	for _, dst := range slices.Sorted(maps.Keys(copies)) {
-		c, err := files.CopyChange(copies[dst], dst, s.root)
+	for _, dst := range slices.Sorted(maps.Keys(capture.Copies)) {
+		src := capture.Copies[dst]
+		c, err := files.CopyChange(src, dst, s.root)
 
 		if err != nil {
-			s.warn("copy %s: %v", copies[dst], err)
+			s.warn("copy %s: %v", src, err)
 
 			continue
 		}

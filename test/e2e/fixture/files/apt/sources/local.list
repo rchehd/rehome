@@ -1,0 +1,1 @@
+deb [trusted=yes] file:/e2e/fixture/localrepo ./
