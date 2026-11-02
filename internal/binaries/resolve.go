@@ -25,6 +25,7 @@ var managed = []string{
 func Resolve(ctx context.Context, r *runner.Runner, cat *catalog.Catalog, known map[string]bool) ([]adapter.Detected, error) {
 	type candidate struct{ name, path, target string }
 	var cands []candidate
+	self := selfPath()
 
 	for _, dir := range binDirs {
 		entries, _ := os.ReadDir(adapter.Home(dir))
@@ -33,7 +34,7 @@ func Resolve(ctx context.Context, r *runner.Runner, cat *catalog.Catalog, known 
 			path := filepath.Join(adapter.Home(dir), e.Name())
 			target, err := filepath.EvalSymlinks(path)
 
-			if err != nil || known[e.Name()] || isManaged(target) {
+			if err != nil || known[e.Name()] || isManaged(target) || isSelf(e.Name(), target, self) {
 				continue
 			}
 
@@ -143,6 +144,28 @@ func dpkgOwned(ctx context.Context, r *runner.Runner, paths []string) map[string
 	}
 
 	return owned
+}
+
+// rehome never lists itself: it is already present wherever it runs, and reinstalling
+// itself from its own config would be a loop.
+func isSelf(name, target, self string) bool {
+	return name == "rehome" || (self != "" && target == self)
+}
+
+func selfPath() string {
+	exe, err := os.Executable()
+
+	if err != nil {
+		return ""
+	}
+
+	path, err := filepath.EvalSymlinks(exe)
+
+	if err != nil {
+		return ""
+	}
+
+	return path
 }
 
 func isManaged(target string) bool {

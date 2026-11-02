@@ -1,0 +1,50 @@
+version: 1
+apps:
+  - id: htop
+    install: { debian: { apt: htop } }
+  - id: zsh
+    group: shell
+    install: { debian: { apt: zsh } }
+    files: zsh
+  - id: gh
+    install: { debian: { apt: gh, repo: github-cli } }
+  - id: oh-my-zsh
+    group: shell
+    requires: [zsh]
+    install: { any: { script: 'sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended --keep-zshrc', bin: ~/.oh-my-zsh/oh-my-zsh.sh } }
+    files: oh-my-zsh
+  - id: oh-my-zsh-zsh-autosuggestions
+    group: shell
+    requires: [oh-my-zsh]
+    install: { any: { script: 'git clone --depth 1 https://github.com/zsh-users/zsh-autosuggestions.git "$HOME"/.oh-my-zsh/custom/plugins/zsh-autosuggestions', bin: ~/.oh-my-zsh/custom/plugins/zsh-autosuggestions } }
+  - id: uv
+    install: { any: { script: curl -LsSf https://astral.sh/uv/install.sh | sh, bin: uv } }
+  - id: ruff
+    requires: [uv]
+    install: { any: { uv_tool: ruff, bin: ruff } }
+  - id: nvm
+    install: { any: { script: curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash, bin: ~/.nvm/nvm.sh } }
+  - id: node
+    requires: [nvm]
+    install: { any: { script: '[ -s "$HOME/.nvm/nvm.sh" ] && . "$HOME/.nvm/nvm.sh"; nvm install ''lts/*'' && nvm alias default ''lts/*''', bin: ~/.nvm/versions/node/*/bin/node } }
+  - id: rustup # disabled on purpose: dependents must still install
+    enabled: false
+    install: { any: { script: "false", bin: ~/.cargo/bin/rustup } }
+  - id: needs-rustup
+    requires: [rustup]
+    install: { any: { script: touch ~/needs-rustup, bin: ~/needs-rustup } }
+  - id: ghost # its repo cannot be reached: the run must report it and go on
+    install: { debian: { apt: ghost-package, repo: broken } }
+  - id: needs-ghost
+    requires: [ghost]
+    install: { any: { script: touch ~/needs-ghost, bin: ~/needs-ghost } }
+
+apt_repos:
+  github-cli: { source: files/apt/sources/github-cli.list, keyring: files/apt/keyrings/githubcli-archive-keyring.gpg }
+  broken: { source: files/apt/sources/broken.list }
+
+files:
+  zsh:
+    - { src: files/zsh/.zshrc, dest: { linux: ~/.zshrc } }
+  oh-my-zsh:
+    - { src: files/oh-my-zsh/themes/e2e.zsh-theme, dest: { linux: ~/.oh-my-zsh/custom/themes/e2e.zsh-theme } }
