@@ -57,6 +57,25 @@ and `rehome push` refuses to push anything that still looks like a secret. Log i
 - Re-running is safe: present apps are skipped, local settings are never overwritten without asking.
 - Third-party apt repos are retargeted to the new release; repos that fail are disabled and reported.
 
+## Versions
+
+`rehome scan` also writes `rehome.lock` next to the config, with the version of every app it can read. On install:
+
+- with a lock you choose the same versions or the latest (`--versions locked|latest`); without a lock you get the latest;
+- a pinned version that is no longer available is replaced by the latest, and the report says so;
+- installed apps are never downgraded; older ones are listed, and `--upgrade` (or `u` in the checklist) raises them;
+- `version: 1.2.3` on an app pins it permanently; `--lock <file>` uses a lock kept elsewhere.
+
+Keep apps off an OS or a machine:
+
+```yaml
+apps:
+  - id: steam
+    skip: [macos]
+ignore:
+  my-laptop: [docker, php8.1]
+```
+
 ## License
 
 TBD

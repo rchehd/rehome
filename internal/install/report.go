@@ -24,6 +24,22 @@ func (r *Report) Print(w io.Writer) {
 		}
 	}
 
+	for _, o := range r.Upgraded {
+		fmt.Fprintf(w, "  ↑ %s: %s\n", o.ID, o.Reason)
+	}
+
+	if len(r.Upgradable) > 0 {
+		fmt.Fprintln(w, "older than the lock (rehome install --upgrade):")
+
+		for _, o := range r.Upgradable {
+			fmt.Fprintf(w, "  %s: %s\n", o.ID, o.Reason)
+		}
+	}
+
+	for _, n := range r.VersionNotes {
+		fmt.Fprintf(w, "version: %s\n", n)
+	}
+
 	if len(r.KeptLocal) > 0 {
 		fmt.Fprintln(w, "settings kept as they are (differ from the config; use --overwrite-files to replace):")
 

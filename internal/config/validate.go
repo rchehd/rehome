@@ -3,8 +3,11 @@ package config
 import (
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 )
+
+var platformKeys = []string{"debian", "macos", "fedora", "arch"}
 
 // Validate returns every problem found; an empty slice means the config is usable.
 func (c *Config) Validate() []error {
@@ -24,6 +27,12 @@ func (c *Config) Validate() []error {
 
 		ids[a.ID] = true
 		errs = append(errs, validateSpecs(a)...)
+
+		for _, key := range a.Skip {
+			if !slices.Contains(platformKeys, key) {
+				errs = append(errs, fmt.Errorf("%s: unknown platform %q in skip", a.ID, key))
+			}
+		}
 	}
 
 	for _, a := range c.Apps {

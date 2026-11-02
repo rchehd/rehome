@@ -8,6 +8,7 @@ import (
 
 	"github.com/rchehd/rehome/internal/catalog"
 	"github.com/rchehd/rehome/internal/config"
+	"github.com/rchehd/rehome/internal/lock"
 	"github.com/rchehd/rehome/internal/platform"
 	"github.com/rchehd/rehome/internal/status"
 )
@@ -59,5 +60,23 @@ func computeStatus(cmd *cobra.Command) (*status.Status, error) {
 		return nil, err
 	}
 
-	return status.Compute(cmd.Context(), newRunner(), cfg, existing, root, p, cat)
+	repo, err := lock.Load(lock.Path(root, flags.lock))
+
+	if err != nil {
+		return nil, err
+	}
+
+	localPath, err := lock.LocalPath()
+
+	if err != nil {
+		return nil, err
+	}
+
+	local, err := lock.Load(localPath)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return status.Compute(cmd.Context(), newRunner(), cfg, existing, root, p, cat, repo, local)
 }

@@ -17,6 +17,9 @@ var prerequisites = []string{"git", "curl", "ca-certificates", "gnupg"}
 
 type Options struct {
 	OverwriteFiles bool
+	// Upgrade raises every installed app older than the lock; UpgradeIDs only those listed.
+	Upgrade    bool
+	UpgradeIDs []string
 }
 
 type Event struct {
@@ -33,6 +36,9 @@ type Report struct {
 	KeptLocal             []files.ApplyResult
 	ManualSecrets         []string
 	Notes                 []string
+	// Upgraded were raised to the lock version; Upgradable could be (rehome install --upgrade).
+	Upgraded, Upgradable []Outcome
+	VersionNotes         []string
 }
 
 type executor struct {
@@ -70,8 +76,10 @@ func Execute(ctx context.Context, r *runner.Runner, plan *Plan, opts Options, pr
 	x.recordBroken()
 	failedRepos := x.prepareApt(missing)
 	x.installAll(failedRepos)
+	x.upgrade()
 	x.restoreClaude()
 	x.postInstall()
+	x.recordVersions()
 
 	return x.report, nil
 }
@@ -206,6 +214,10 @@ func (x *executor) installStep(i int, s Step, failedRepos map[string]bool) {
 		x.state[id] = "done"
 
 		return
+	case StatusIgnored:
+		x.state[id] = "disabled"
+
+		return
 	case StatusDisabled:
 		x.state[id] = "disabled"
 		x.report.Skipped = append(x.report.Skipped, Outcome{ID: id})
@@ -231,7 +243,7 @@ func (x *executor) installStep(i int, s Step, failedRepos map[string]bool) {
 
 	x.progress(Event{Index: i + 1, Total: len(x.plan.Steps), ID: id, Phase: "install"})
 
-	if err := s.Adapter.Install(x.ctx, x.r, s.Spec); err != nil {
+	if err := x.install(s); err != nil {
 		reason := "install failed"
 
 		if removed := x.unbreakApt(); s.Spec.Apt != "" && len(removed) > 0 {
