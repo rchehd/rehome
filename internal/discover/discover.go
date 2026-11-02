@@ -94,8 +94,13 @@ func candidates(name string) []string {
 	}
 
 	// ~/.config names are often capitalised (GitKraken, Termius); match them case-insensitively.
-	if dir := configDir(name); dir != "" {
+	if dir := childDir("~/.config", name); dir != "" {
 		out = append(out, ".config/"+dir+"/**")
+	}
+
+	// macOS apps keep settings in Application Support (Rectangle, Raycast, …).
+	if dir := childDir("~/Library/Application Support", name); dir != "" {
+		out = append(out, "Library/Application Support/"+dir+"/**")
 	}
 
 	for _, ext := range configExts {
@@ -185,8 +190,9 @@ func Claimed(rules []config.FileRule) []string {
 	return out
 }
 
-func configDir(name string) string {
-	entries, err := os.ReadDir(adapter.Home("~/.config"))
+// childDir finds a directory under parent whose name matches case-insensitively.
+func childDir(parent, name string) string {
+	entries, err := os.ReadDir(adapter.Home(parent))
 
 	if err != nil {
 		return ""

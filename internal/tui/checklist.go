@@ -290,6 +290,10 @@ func renderRow(r row) string {
 		detail = name + " " + pkg
 	}
 
+	if s.Mapped != "" {
+		detail += " (auto)"
+	}
+
 	if len(detail) > 60 {
 		detail = detail[:57] + "…"
 	}

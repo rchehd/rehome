@@ -5,9 +5,11 @@ import (
 
 	"github.com/rchehd/rehome/internal/adapter"
 	"github.com/rchehd/rehome/internal/adapter/apt"
+	"github.com/rchehd/rehome/internal/adapter/brew"
 	"github.com/rchehd/rehome/internal/adapter/cargo"
 	"github.com/rchehd/rehome/internal/adapter/flatpak"
 	"github.com/rchehd/rehome/internal/adapter/gotool"
+	"github.com/rchehd/rehome/internal/adapter/mas"
 	"github.com/rchehd/rehome/internal/adapter/npm"
 	"github.com/rchehd/rehome/internal/adapter/pipx"
 	"github.com/rchehd/rehome/internal/adapter/script"
@@ -28,6 +30,9 @@ func registry() []adapter.Adapter {
 		uvtool.UvTool{},
 		cargo.Cargo{},
 		gotool.GoTool{},
+		brew.Brew{},
+		brew.Cask{},
+		mas.Mas{},
 		script.Script{},
 	}
 }

@@ -17,13 +17,15 @@ import (
 var data embed.FS
 
 type Entry struct {
-	ID          string                        `yaml:"id"`
-	Group       string                        `yaml:"group"`
-	Install     map[string]config.InstallSpec `yaml:"install"`
-	Detect      Detect                        `yaml:"detect"`
-	Files       map[string]FileRule           `yaml:"files"`
-	Requires    []string                      `yaml:"requires"`
-	PostInstall []string                      `yaml:"post_install"`
+	ID       string                        `yaml:"id"`
+	Group    string                        `yaml:"group"`
+	Install  map[string]config.InstallSpec `yaml:"install"`
+	Detect   Detect                        `yaml:"detect"`
+	Files    map[string]FileRule           `yaml:"files"`
+	Requires []string                      `yaml:"requires"`
+	// Skip lists platforms the app does not exist on (no installer to map to).
+	Skip        []string `yaml:"skip"`
+	PostInstall []string `yaml:"post_install"`
 }
 
 // Detect says how to recognise the software; any matching field is enough.
@@ -33,6 +35,8 @@ type Detect struct {
 	Bins     []string `yaml:"bins"`
 	// Path is a glob (with ~) whose existence proves a script install.
 	Path string `yaml:"path"`
+	// Paths are more such globs, e.g. the same thing's location on another OS.
+	Paths []string `yaml:"paths"`
 }
 
 // FileRule is the shared settings-file rule (see config.FileRule).
@@ -121,7 +125,7 @@ func (c *Catalog) Present(platformKey string) []Entry {
 	var found []Entry
 
 	for _, e := range c.Entries {
-		if e.Detect.Path == "" {
+		if e.Detect.Path == "" && len(e.Detect.Paths) == 0 {
 			continue
 		}
 
@@ -130,8 +134,12 @@ func (c *Catalog) Present(platformKey string) []Entry {
 			continue
 		}
 
-		if matches, _ := filepath.Glob(adapter.Home(e.Detect.Path)); len(matches) > 0 {
-			found = append(found, e)
+		for _, path := range append([]string{e.Detect.Path}, e.Detect.Paths...) {
+			if matches, _ := filepath.Glob(adapter.Home(path)); path != "" && len(matches) > 0 {
+				found = append(found, e)
+
+				break
+			}
 		}
 	}
 

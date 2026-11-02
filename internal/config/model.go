@@ -53,8 +53,13 @@ type InstallSpec struct {
 	Cargo   string `yaml:"cargo,omitempty"`
 	GoPkg   string `yaml:"go,omitempty"`
 	Script  string `yaml:"script,omitempty"`
+	Brew    string `yaml:"brew,omitempty"`
+	Cask    string `yaml:"cask,omitempty"`
+	Mas     string `yaml:"mas,omitempty"`
 
-	Repo      string `yaml:"repo,omitempty"`
+	Repo string `yaml:"repo,omitempty"`
+	// Tap is a third-party Homebrew tap (user/repo) the formula or cask comes from.
+	Tap       string `yaml:"tap,omitempty"`
 	DebURL    string `yaml:"deb_url,omitempty"`
 	Classic   bool   `yaml:"classic,omitempty"`
 	Channel   string `yaml:"channel,omitempty"`
@@ -126,6 +131,9 @@ func (s InstallSpec) managers() []managerField {
 		{"cargo", s.Cargo},
 		{"go", s.GoPkg},
 		{"script", s.Script},
+		{"brew", s.Brew},
+		{"cask", s.Cask},
+		{"mas", s.Mas},
 	}
 }
 

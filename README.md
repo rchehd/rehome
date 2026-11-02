@@ -6,7 +6,7 @@ Move your whole workstation to a new machine.
 generates a portable config. On a fresh machine, feed it the same config and it installs everything from scratch
 or fills in whatever is missing, picking the right package manager for the detected OS.
 
-> Supports Ubuntu and Debian. No release yet — build from source.
+> Supports Ubuntu, Debian and macOS. No release yet — build from source.
 
 ## Install
 
@@ -40,8 +40,8 @@ present, `--overwrite-files` to replace differing settings (a `.rehome.bak` is k
 
 ## What it picks up
 
-- **Packages:** apt (without the base OS, linked to third-party repos and their keys), snap, flatpak, global npm
-  (nvm), pipx, uv tools, cargo, `go install`
+- **Packages:** apt (without the base OS, linked to third-party repos and their keys), snap, flatpak, Homebrew
+  formulae, casks and taps, Mac App Store (with `mas`), global npm (nvm), pipx, uv tools, cargo, `go install`
 - **Script installs** it knows from its catalog: Claude Code, Codex, oh-my-zsh and its plugins, uv, nvm, Go,
   JetBrains Toolbox, Zed, …
 - **Settings:** zsh, oh-my-zsh custom, fonts, git, gh, Sublime Text, JetBrains, kitty, Ghostty, Zed, Claude Code
@@ -63,6 +63,14 @@ an unknown binary — is listed under **needs your attention** with what to do a
 
 Secrets are never written: tokens, passwords and keys in settings files are replaced with `<rehome:redacted>`,
 and `rehome push` refuses to push anything that still looks like a secret. Log in again after installing.
+
+## Moving between Linux and macOS
+
+A config made on Ubuntu installs on a Mac (and the other way round) without you looking up package names. When an
+app has no installer for the current OS, rehome finds one: the built-in catalog first, then the same name in Homebrew
+or apt, then known renames (`fd-find` → `fd`), then [Repology](https://repology.org). The plan marks these as
+auto-mapped, and the next `rehome scan` on that machine records them. Apps that do not exist on the other OS are listed
+with what to add; `--offline` keeps the lookup to the local package index. Homebrew is installed first if it is missing.
 
 ## How install behaves
 

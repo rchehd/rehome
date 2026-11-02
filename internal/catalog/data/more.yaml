@@ -9,6 +9,7 @@
   group: shell
   install:
     debian: { apt: fish }
+    macos: { brew: fish }
   detect: { packages: [fish] }
   files:
     linux: &fishfiles { base: ~/.config/fish, include: ["**"], exclude: [fish_history] }
@@ -16,6 +17,8 @@
 
 - id: nushell
   group: shell
+  install:
+    macos: { brew: nushell }
   detect: { bins: [nu], path: ~/.config/nushell }
   files:
     linux: { base: ~/.config/nushell, include: ["**"], exclude: [history.txt, history.sqlite3] }
@@ -39,6 +42,7 @@
   group: editors
   install:
     debian: { apt: neovim }
+    macos: { brew: neovim }
   detect: { packages: [neovim], bins: [nvim] }
   files:
     linux: &nvimfiles { base: ~/.config/nvim, include: ["**"] }
@@ -48,6 +52,7 @@
   group: editors
   install:
     debian: { apt: vim }
+    macos: { brew: vim }
   detect: { packages: [vim, vim-gtk3] }
   files:
     linux: &vimfiles { base: "~", include: [.vimrc, .vim/**], exclude: [.vim/undo/**, .vim/swap/**, .vim/backup/**, "**/.netrwhist"] }
@@ -57,6 +62,7 @@
   group: terminals
   install:
     debian: { apt: alacritty }
+    macos: { cask: alacritty }
   detect: { packages: [alacritty] }
   files:
     linux: &alacrittyfiles { base: ~/.config/alacritty, include: ["**"] }
@@ -64,6 +70,8 @@
 
 - id: wezterm
   group: terminals
+  install:
+    macos: { cask: wezterm }
   detect: { bins: [wezterm], packages: [wezterm] }
   files:
     linux: &weztermfiles { base: "~", include: [.wezterm.lua, .config/wezterm/**] }
@@ -71,7 +79,9 @@
 
 - id: vscode
   group: editors
-  detect: { packages: [code], bins: [code] }
+  install:
+    macos: { cask: visual-studio-code }
+  detect: { packages: [code, visual-studio-code], bins: [code] }
   files:
     linux: { base: ~/.config/Code/User, include: [settings.json, keybindings.json, snippets/**] }
     macos: { base: ~/Library/Application Support/Code/User, include: [settings.json, keybindings.json, snippets/**] }
@@ -80,6 +90,7 @@
   group: tools
   install:
     debian: { apt: htop }
+    macos: { brew: htop }
   detect: { packages: [htop] }
   files:
     linux: { base: ~/.config/htop, include: [htoprc] }
@@ -88,12 +99,15 @@
   group: tools
   install:
     debian: { apt: btop }
+    macos: { brew: btop }
   detect: { packages: [btop] }
   files:
     linux: { base: ~/.config/btop, include: [btop.conf, themes/**] }
 
 - id: lazygit
   group: dev
+  install:
+    macos: { brew: lazygit }
   detect: { bins: [lazygit] }
   files:
     linux: &lazygitfiles { base: ~/.config/lazygit, include: [config.yml] }

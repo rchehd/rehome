@@ -73,6 +73,7 @@ type PlanStep struct {
 	Installed string `json:"installed,omitempty"`
 	Upgrade   string `json:"upgrade,omitempty"`
 	Reason    string `json:"reason,omitempty"`
+	Mapped    string `json:"auto_mapped,omitempty"`
 }
 
 type PlanReport struct {
@@ -90,7 +91,7 @@ func PlanJSON(plan *install.Plan) PlanReport {
 		name, pkg := s.Spec.Manager()
 		r.Steps = append(r.Steps, PlanStep{
 			ID: s.App.ID, Status: s.Status, Manager: name, Package: pkg,
-			Pin: label(s.Pin), Installed: s.Installed, Upgrade: label(s.Upgrade), Reason: s.Reason,
+			Pin: label(s.Pin), Installed: s.Installed, Upgrade: label(s.Upgrade), Reason: s.Reason, Mapped: s.Mapped,
 		})
 	}
 

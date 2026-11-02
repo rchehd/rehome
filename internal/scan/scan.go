@@ -88,6 +88,8 @@ func Run(ctx context.Context, r *runner.Runner, p platform.Platform, cat *catalo
 		s.warn("apt repos: %v", err)
 	}
 
+	s.dropUnknownRepos()
+
 	if err := s.captureFiles(); err != nil {
 		return nil, err
 	}
@@ -226,6 +228,17 @@ func (s *scanner) captureRepos() error {
 	}
 
 	return nil
+}
+
+// dropUnknownRepos removes another platform's catalog spec whose apt repo this scan has no definition for.
+func (s *scanner) dropUnknownRepos() {
+	for _, a := range s.apps {
+		for key, spec := range a.Install {
+			if key != s.p.Key() && spec.Repo != "" && s.res.Config.AptRepos[spec.Repo].Source == "" {
+				delete(a.Install, key)
+			}
+		}
+	}
 }
 
 func (s *scanner) captureFiles() error {

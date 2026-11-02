@@ -8,9 +8,11 @@ import (
 
 	"github.com/rchehd/rehome/internal/adapter"
 	"github.com/rchehd/rehome/internal/adapter/all"
+	"github.com/rchehd/rehome/internal/catalog"
 	"github.com/rchehd/rehome/internal/config"
 	"github.com/rchehd/rehome/internal/lock"
 	"github.com/rchehd/rehome/internal/platform"
+	"github.com/rchehd/rehome/internal/resolve"
 	"github.com/rchehd/rehome/internal/runner"
 )
 
@@ -34,6 +36,8 @@ type Step struct {
 	// Installed is the version present now; Upgrade the newer one the lock offers.
 	Installed string
 	Upgrade   lock.Entry
+	// Mapped says where an installer for this OS was found when the config had none.
+	Mapped string
 }
 
 type Plan struct {
@@ -57,6 +61,8 @@ type Selection struct {
 	All    bool
 	Mode   string
 	Latest []string
+	// Offline skips network lookups (Homebrew API, Repology) when mapping installers.
+	Offline bool
 }
 
 // Build resolves every app to a step in dependency order.
@@ -66,13 +72,14 @@ func Build(ctx context.Context, r *runner.Runner, cfg *config.Config, root strin
 	}
 
 	plan := &Plan{Config: cfg, Root: root, Platform: p, Lock: lk, Mode: sel.Mode}
+	res := newResolver(r, p, sel.Offline)
 
 	for _, app := range cfg.Apps {
 		if sel.IDs != nil && !slices.Contains(sel.IDs, app.ID) {
 			continue
 		}
 
-		step := resolve(ctx, r, app, p, sel)
+		step := resolveStep(ctx, r, app, p, sel, res)
 
 		if cfg.Ignored(app, p.Key(), config.Hostname()) {
 			step.Status, step.Reason = StatusIgnored, "ignored on this machine or OS"
@@ -92,7 +99,7 @@ func Build(ctx context.Context, r *runner.Runner, cfg *config.Config, root strin
 	return plan, nil
 }
 
-func resolve(ctx context.Context, r *runner.Runner, app config.App, p platform.Platform, sel Selection) Step {
+func resolveStep(ctx context.Context, r *runner.Runner, app config.App, p platform.Platform, sel Selection, res *resolve.Resolver) Step {
 	step := Step{App: app}
 
 	if sel.IDs == nil && !app.IsEnabled() {
@@ -103,14 +110,28 @@ func resolve(ctx context.Context, r *runner.Runner, app config.App, p platform.P
 
 	spec, ok := app.Spec(p.Key())
 
-	if !ok {
-		step.Status, step.Reason = StatusUnavailable, "no install method for "+p.Key()
+	if !ok && len(app.Install) == 0 {
+		step.Status, step.Reason = StatusUnavailable, "no install method"
 
-		if len(app.Install) == 0 && app.Files != "" {
+		if app.Files != "" {
 			step.Status, step.Reason = StatusFilesOnly, ""
 		}
 
 		return step
+	}
+
+	// The config was written on another OS: find this OS's installer by itself.
+	if !ok {
+		mapped, source, found := res.Resolve(ctx, app)
+
+		if !found {
+			step.Status = StatusUnavailable
+			step.Reason = "no installer found for " + p.Key() + ": add install." + p.Key() + " (rehome config add-install " + app.ID + " …)"
+
+			return step
+		}
+
+		spec, step.Mapped = mapped, source
 	}
 
 	a, err := all.ByManager(spec)
@@ -230,4 +251,25 @@ func (p *Plan) Commands() []string {
 	}
 
 	return cmds
+}
+
+func newResolver(r *runner.Runner, p platform.Platform, offline bool) *resolve.Resolver {
+	res := &resolve.Resolver{PlatformKey: p.Key()}
+
+	if cat, err := catalog.Load(); err == nil {
+		res.Catalog = cat
+	}
+
+	switch p.Key() {
+	case "macos":
+		res.Index = resolve.BrewIndex{Runner: r, Offline: offline}
+	case "debian":
+		res.Index = resolve.AptIndex{Runner: r}
+	}
+
+	if !offline {
+		res.Repology = resolve.NewRepology()
+	}
+
+	return res
 }
