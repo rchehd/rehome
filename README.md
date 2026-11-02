@@ -120,4 +120,4 @@ ignore:
 
 ## License
 
-TBD
+[MIT](LICENSE)

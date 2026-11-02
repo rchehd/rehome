@@ -47,6 +47,14 @@ func (Snap) Scan(ctx context.Context, r *runner.Runner) ([]adapter.Detected, err
 			continue
 		}
 
+		// A snap installed from a local file has no store channel to reinstall from.
+		if f[3] == "-" {
+			meta := map[string]string{"origin": "installed from a local .snap file; add an install method"}
+			found = append(found, adapter.Detected{Manager: "unknown", Name: f[0], Meta: meta})
+
+			continue
+		}
+
 		spec := config.InstallSpec{Snap: f[0], Classic: strings.Contains(f[5], "classic")}
 
 		if ch := f[3]; ch != "latest/stable" && !strings.HasSuffix(ch, "/…") {
