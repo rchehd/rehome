@@ -5,6 +5,8 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strconv"
+	"time"
 
 	"github.com/rchehd/rehome/internal/adapter"
 	"github.com/rchehd/rehome/internal/config"
@@ -84,7 +86,7 @@ func applyOne(root string, m config.FileMap, opts ApplyOptions) (ApplyResult, er
 	case errors.Is(err, os.ErrNotExist):
 		res.Status = StatusCopied
 
-		return res, write(dest, repo, opts.DryRun)
+		return res, write(dest, repo, fileMode(m.Mode), opts.DryRun)
 	case err != nil:
 		return res, err
 	case bytes.Equal(local, repo) || isRedactedCopy(dest, local, repo):
@@ -106,22 +108,44 @@ func applyOne(root string, m config.FileMap, opts ApplyOptions) (ApplyResult, er
 		return res, nil
 	}
 
-	if err := os.WriteFile(dest+BackupSuffix, local, 0o600); err != nil {
+	if err := backup(dest, local); err != nil {
 		return res, err
 	}
 
-	return res, write(dest, repo, false)
+	return res, write(dest, repo, fileMode(m.Mode), false)
 }
 
 // Overwrite replaces a kept-local file with the config's version, keeping a backup.
 func Overwrite(res ApplyResult) error {
 	dest := adapter.Home(res.Dest)
 
-	if err := os.WriteFile(dest+BackupSuffix, res.Local, 0o600); err != nil {
+	if err := backup(dest, res.Local); err != nil {
 		return err
 	}
 
-	return write(dest, res.Repo, false)
+	return write(dest, res.Repo, 0, false)
+}
+
+// backup keeps the previous content; an older backup is never overwritten.
+func backup(dest string, data []byte) error {
+	path := dest + BackupSuffix
+
+	if _, err := os.Stat(path); err == nil {
+		path += "." + time.Now().Format("20060102-150405")
+	}
+
+	return os.WriteFile(path, data, 0o600)
+}
+
+// fileMode parses a FileMap mode; 0 means "keep the file's or the default mode".
+func fileMode(s string) os.FileMode {
+	m, err := strconv.ParseUint(s, 8, 32)
+
+	if err != nil {
+		return 0
+	}
+
+	return os.FileMode(m)
 }
 
 // isRedactedCopy is true when the local file only differs by the secrets the repo hides.
@@ -131,7 +155,9 @@ func isRedactedCopy(path string, local, repo []byte) bool {
 	return len(findings) > 0 && bytes.Equal(redacted, repo)
 }
 
-func write(dest string, data []byte, dryRun bool) error {
+// write keeps an existing file's mode; a new file gets want (private modes from the config)
+// or 0644.
+func write(dest string, data []byte, want os.FileMode, dryRun bool) error {
 	if dryRun {
 		return nil
 	}
@@ -142,9 +168,18 @@ func write(dest string, data []byte, dryRun bool) error {
 
 	mode := os.FileMode(0o644)
 
+	if want != 0 {
+		mode = want
+	}
+
 	if info, err := os.Stat(dest); err == nil {
 		mode = info.Mode().Perm()
 	}
 
-	return os.WriteFile(dest, data, mode)
+	if err := os.WriteFile(dest, data, mode); err != nil {
+		return err
+	}
+
+	// WriteFile applies the mode only when creating; an existing file keeps its own.
+	return os.Chmod(dest, mode)
 }

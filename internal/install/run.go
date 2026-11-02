@@ -202,7 +202,10 @@ func (x *executor) installAll(failedRepos map[string]bool) {
 		}
 
 		if st := x.state[s.App.ID]; st == "done" || st == "installed" {
-			x.applyFiles(s)
+			// A settings-only app counts as done (and runs post_install) only when files changed.
+			if x.applyFiles(s) && s.Status == StatusFilesOnly {
+				x.state[s.App.ID] = "done"
+			}
 		}
 	}
 }
@@ -216,7 +219,7 @@ func (x *executor) installStep(i int, s Step, failedRepos map[string]bool) {
 
 		return
 	case StatusFilesOnly:
-		x.state[id] = "done"
+		x.state[id] = "installed"
 
 		return
 	case StatusIgnored:
@@ -342,9 +345,10 @@ func without(list, drop []string) []string {
 	return kept
 }
 
-func (x *executor) applyFiles(s Step) {
+// applyFiles reports whether any file was written.
+func (x *executor) applyFiles(s Step) bool {
 	if s.App.Files == "" {
-		return
+		return false
 	}
 
 	x.progress(Event{ID: s.App.ID, Phase: "settings"})
@@ -358,7 +362,11 @@ func (x *executor) applyFiles(s Step) {
 		x.note("%s settings: %v", s.App.ID, err)
 	}
 
+	changed := false
+
 	for _, res := range results {
+		changed = changed || res.Status == files.StatusCopied || res.Status == files.StatusOverwritten
+
 		if res.Status == files.StatusKeptLocal {
 			x.report.KeptLocal = append(x.report.KeptLocal, res)
 		}
@@ -367,6 +375,8 @@ func (x *executor) applyFiles(s Step) {
 			x.report.ManualSecrets = append(x.report.ManualSecrets, res.Dest)
 		}
 	}
+
+	return changed
 }
 
 func (x *executor) recordBroken() {

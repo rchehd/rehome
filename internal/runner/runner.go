@@ -124,7 +124,8 @@ func (c Cmd) argv() []string {
 		argv = []string{"bash", "-o", "pipefail", "-c", c.Shell}
 	}
 
-	if c.Sudo {
+	// Root needs no sudo, and minimal containers often lack it.
+	if c.Sudo && os.Geteuid() != 0 {
 		argv = append([]string{"sudo"}, argv...)
 	}
 

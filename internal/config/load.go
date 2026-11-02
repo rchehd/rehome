@@ -56,6 +56,11 @@ func IsURL(source string) bool {
 }
 
 func read(source string) ([]byte, string, error) {
+	// Over plain http anyone on the network could swap the install scripts.
+	if strings.HasPrefix(source, "http://") {
+		return nil, "", fmt.Errorf("refusing insecure config URL %s: use https", source)
+	}
+
 	if IsURL(source) {
 		return fetch(source)
 	}

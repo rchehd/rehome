@@ -2,6 +2,7 @@ package files
 
 import (
 	"bytes"
+	"fmt"
 	"io/fs"
 	"os"
 	"path"
@@ -73,7 +74,7 @@ func CaptureRules(id string, rules map[string]config.FileRule, fileKey, root str
 		}
 
 		dst := path.Join("files", id, filepath.ToSlash(rel))
-		maps = append(maps, fileMap(rules, dst, rel))
+		maps = append(maps, fileMap(rules, dst, rel, info.Mode().Perm()))
 		redacted, findings := secrets.Redact(adapter.Tilde(src), raw)
 		old, _ := os.ReadFile(filepath.Join(root, dst))
 
@@ -127,8 +128,12 @@ func WriteChanges(root string, cs []Change) error {
 	return nil
 }
 
-func fileMap(rules map[string]config.FileRule, dst, rel string) config.FileMap {
+func fileMap(rules map[string]config.FileRule, dst, rel string, perm fs.FileMode) config.FileMap {
 	m := config.FileMap{Src: dst, Dest: map[string]string{}}
+
+	if perm&0o077 == 0 {
+		m.Mode = fmt.Sprintf("%04o", perm)
+	}
 
 	for _, key := range []string{"linux", "macos"} {
 		if r, ok := rules[key]; ok && r.Base != "" {
@@ -144,60 +149,83 @@ func Select(base string, rule config.FileRule) ([]string, error) {
 	return selectFiles(base, rule)
 }
 
-// selectFiles walks only the directories an include pattern can reach.
+// selectFiles walks only the directories an include pattern can reach. It follows symlinks,
+// so dotfiles linked in by stow and similar tools are found; a loop is walked once.
 func selectFiles(base string, rule config.FileRule) ([]string, error) {
-	seen := map[string]bool{}
-	var rels []string
+	w := &walker{base: base, rule: rule, seen: map[string]bool{}}
 
 	for _, inc := range rule.Include {
 		start := staticPrefix(inc)
-		root := filepath.Join(base, start)
-		info, err := os.Lstat(root)
+		info, err := os.Stat(filepath.Join(base, start))
 
 		if err != nil {
 			continue
 		}
 
 		if !info.IsDir() {
-			if rule.Matches(start) && !seen[start] {
-				seen[start] = true
-				rels = append(rels, start)
+			w.add(start)
+
+			continue
+		}
+
+		w.visited = map[string]bool{}
+		w.dir(inc, start)
+	}
+
+	return w.rels, nil
+}
+
+type walker struct {
+	base    string
+	rule    config.FileRule
+	seen    map[string]bool
+	visited map[string]bool
+	rels    []string
+}
+
+func (w *walker) add(rel string) {
+	if w.rule.Matches(rel) && !w.seen[rel] {
+		w.seen[rel] = true
+		w.rels = append(w.rels, rel)
+	}
+}
+
+func (w *walker) dir(inc, rel string) {
+	abs := filepath.Join(w.base, rel)
+	real, err := filepath.EvalSymlinks(abs)
+
+	if err != nil || w.visited[real] {
+		return
+	}
+
+	w.visited[real] = true
+	entries, err := os.ReadDir(abs)
+
+	if err != nil {
+		return
+	}
+
+	for _, e := range entries {
+		child := path.Join(rel, e.Name())
+		info, err := os.Stat(filepath.Join(w.base, child))
+
+		if err != nil {
+			continue
+		}
+
+		if !info.IsDir() {
+			if info.Mode().IsRegular() {
+				w.add(child)
 			}
 
 			continue
 		}
 
-		err = filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
-			if err != nil {
-				return nil
-			}
-
-			rel, _ := filepath.Rel(base, p)
-			rel = filepath.ToSlash(rel)
-
-			if d.IsDir() {
-				// A nested .git would become an embedded repo (gitlink) in the config repo.
-				if d.Name() == ".git" || (rel != "." && rel != start && (!couldContain(inc, rel) || excludedDir(rule, rel))) {
-					return filepath.SkipDir
-				}
-
-				return nil
-			}
-
-			if d.Type().IsRegular() && rule.Matches(rel) && !seen[rel] {
-				seen[rel] = true
-				rels = append(rels, rel)
-			}
-
-			return nil
-		})
-
-		if err != nil {
-			return nil, err
+		// A nested .git would become an embedded repo (gitlink) in the config repo.
+		if e.Name() != ".git" && couldContain(inc, child) && !excludedDir(w.rule, child) {
+			w.dir(inc, child)
 		}
 	}
-
-	return rels, nil
 }
 
 // StaticPrefix is the leading part of a glob without wildcards.

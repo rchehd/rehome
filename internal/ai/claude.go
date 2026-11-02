@@ -110,7 +110,7 @@ func restorePlugins(ctx context.Context, r *runner.Runner, claude string, p Plug
 	have, _ := r.Output(ctx, runner.Cmd{Name: claude, Args: []string{"plugin", "marketplace", "list"}})
 
 	for _, m := range p.Marketplaces {
-		if strings.Contains(have, m.Name) {
+		if listed(have)[m.Name] {
 			continue
 		}
 
@@ -122,9 +122,7 @@ func restorePlugins(ctx context.Context, r *runner.Runner, claude string, p Plug
 	installed, _ := r.Output(ctx, runner.Cmd{Name: claude, Args: []string{"plugin", "list"}})
 
 	for _, id := range p.Installed {
-		name, _, _ := strings.Cut(id, "@")
-
-		if strings.Contains(installed, id) || strings.Contains(installed, name+" ") {
+		if listed(installed)[id] {
 			continue
 		}
 
@@ -148,7 +146,7 @@ func restoreMCP(ctx context.Context, r *runner.Runner, claude string, mcp map[st
 			notes = append(notes, fmt.Sprintf("MCP server %s: fill in %s (claude mcp get %s)", name, secrets.Placeholder, name))
 		}
 
-		if strings.Contains(have, name+":") {
+		if mcpNames(have)[name] {
 			continue
 		}
 
@@ -253,6 +251,32 @@ func local(data []byte) []byte {
 	}
 
 	return bytes.ReplaceAll(data, []byte(`"~/`), []byte(`"`+home+`/`))
+}
+
+// listed reads the "❯ name" entries of `claude plugin list` and `claude plugin marketplace list`.
+func listed(out string) map[string]bool {
+	names := map[string]bool{}
+
+	for _, l := range strings.Split(out, "\n") {
+		if name, ok := strings.CutPrefix(strings.TrimSpace(l), "❯ "); ok {
+			names[strings.TrimSpace(name)] = true
+		}
+	}
+
+	return names
+}
+
+// mcpNames reads the "name: command - status" lines of `claude mcp list`.
+func mcpNames(out string) map[string]bool {
+	names := map[string]bool{}
+
+	for _, l := range strings.Split(out, "\n") {
+		if name, _, ok := strings.Cut(l, ": "); ok && !strings.Contains(name, " ") {
+			names[name] = true
+		}
+	}
+
+	return names
 }
 
 // readJSON reports false without error when the file does not exist.

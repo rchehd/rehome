@@ -1,6 +1,9 @@
 package config
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestParseDefaultsVersion(t *testing.T) {
 	cfg, err := Parse([]byte("apps: []\n"))
@@ -54,5 +57,11 @@ func TestLoadExample(t *testing.T) {
 
 	if errs := cfg.Validate(); len(errs) != 0 {
 		t.Errorf("example invalid: %v", errs)
+	}
+}
+
+func TestLoadRefusesPlainHTTP(t *testing.T) {
+	if _, _, err := Load("http://example.com/rehome.yml"); err == nil || !strings.Contains(err.Error(), "https") {
+		t.Errorf("err = %v", err)
 	}
 }
