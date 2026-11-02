@@ -57,15 +57,6 @@ and `rehome push` refuses to push anything that still looks like a secret. Log i
 - Re-running is safe: present apps are skipped, local settings are never overwritten without asking.
 - Third-party apt repos are retargeted to the new release; repos that fail are disabled and reported.
 
-## Testing
-
-```bash
-test/e2e/run.sh ubuntu:24.04 ubuntu:22.04 debian:12
-```
-
-Installs a fixture config twice in clean containers and scans the result; CI runs the same on every push.
-Snap and flatpak need systemd, so they are not covered in containers.
-
 ## License
 
 TBD
