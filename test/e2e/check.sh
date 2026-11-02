@@ -29,6 +29,8 @@ check "unreachable repo disabled" '[ -f /etc/apt/sources.list.d/broken.list.disa
 check "failed app reported" 'grep -q "✗ ghost" /tmp/run1.log'
 check "dependent of failed app skipped" 'grep -q "needs-ghost: requires ghost" /tmp/run1.log && [ ! -e $home/needs-ghost ]'
 check "dependent of disabled app installed" '[ -e $home/needs-rustup ]'
+check "failed postinst reported and package removed" 'grep -q "✗ postinst-broken.*removed to keep apt working" /tmp/run1.log && ! dpkg -s rehome-e2e-broken >/dev/null 2>&1'
+check "dpkg left healthy" '[ -z "$(dpkg -l | awk "NR>5 && \$1 != \"ii\"")" ]'
 check "oh-my-zsh installed before its settings" '[ -f $home/.oh-my-zsh/oh-my-zsh.sh ]'
 check "theme placed into oh-my-zsh custom" 'cmp -s /e2e/fixture/files/oh-my-zsh/themes/e2e.zsh-theme $home/.oh-my-zsh/custom/themes/e2e.zsh-theme'
 check "plugin cloned" '[ -d $home/.oh-my-zsh/custom/plugins/zsh-autosuggestions/.git ]'
@@ -40,7 +42,7 @@ check "node installed via nvm lts alias" 'ls $home/.nvm/versions/node/*/bin/node
 echo "== run 2"
 as_dev "./rehome install --yes --config cfg" > /tmp/run2.log 2>&1
 cat /tmp/run2.log
-check "run 2 only retries the broken app" 'grep -q "to install: 2," /tmp/run2.log && grep -q "installed: 0," /tmp/run2.log'
+check "run 2 only retries the broken apps" 'grep -q "to install: 3," /tmp/run2.log && grep -q "installed: 0," /tmp/run2.log'
 
 echo "== scan"
 as_dev "mkdir -p scanned && ./rehome scan --yes --config scanned" > /tmp/scan.log 2>&1

@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 )
 
@@ -87,6 +88,18 @@ func parseRepo(path string) (Repo, error) {
 	return repo, err
 }
 
+// appendPaths adds keyring paths from a signed-by value: "a.gpg,b.gpg" or "a.gpg b.gpg";
+// inline keys and fingerprints are skipped (the source file carries them).
+func appendPaths(list []string, value string) []string {
+	for _, p := range strings.FieldsFunc(value, func(r rune) bool { return r == ',' || r == ' ' || r == '\t' }) {
+		if strings.HasPrefix(p, "/") && !slices.Contains(list, p) {
+			list = append(list, p)
+		}
+	}
+
+	return list
+}
+
 func parseRepoText(text string, deb822 bool) (Repo, error) {
 	var repo Repo
 	sc := bufio.NewScanner(strings.NewReader(text))
@@ -104,8 +117,8 @@ func parseRepoText(text string, deb822 bool) (Repo, error) {
 				repo.URIs = append(repo.URIs, strings.Fields(v)...)
 			}
 
-			if v, ok := strings.CutPrefix(line, "Signed-By:"); ok && strings.TrimSpace(v) != "" {
-				repo.Keyrings = append(repo.Keyrings, strings.TrimSpace(v))
+			if v, ok := strings.CutPrefix(line, "Signed-By:"); ok {
+				repo.Keyrings = appendPaths(repo.Keyrings, v)
 			}
 
 			continue
@@ -116,7 +129,7 @@ func parseRepoText(text string, deb822 bool) (Repo, error) {
 		}
 
 		if m := signedBy.FindStringSubmatch(line); m != nil {
-			repo.Keyrings = append(repo.Keyrings, m[1])
+			repo.Keyrings = appendPaths(repo.Keyrings, m[1])
 		}
 
 		for _, field := range strings.Fields(strings.TrimPrefix(line, "deb ")) {

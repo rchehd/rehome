@@ -172,9 +172,9 @@ func newDebugCmd() *cobra.Command {
 			},
 		},
 		&cobra.Command{
-			Use:   "retarget <source-file> <codename>",
+			Use:   "retarget <source-file> <from-codename> <to-codename>",
 			Short: "Print an apt source retargeted to another release",
-			Args:  cobra.ExactArgs(2),
+			Args:  cobra.ExactArgs(3),
 			RunE: func(cmd *cobra.Command, args []string) error {
 				data, err := os.ReadFile(args[0])
 
@@ -182,7 +182,7 @@ func newDebugCmd() *cobra.Command {
 					return err
 				}
 
-				cmd.Print(apt.Retarget(string(data), args[1]))
+				cmd.Print(apt.Retarget(string(data), args[1], args[2]))
 
 				return nil
 			},

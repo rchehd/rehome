@@ -1,5 +1,7 @@
 version: 1
 apps:
+  - id: postinst-broken # its postinst fails: apt must keep working for everything after it
+    install: { debian: { apt: rehome-e2e-broken, repo: local } }
   - id: htop
     install: { debian: { apt: htop } }
   - id: zsh
@@ -42,6 +44,7 @@ apps:
 apt_repos:
   github-cli: { source: files/apt/sources/github-cli.list, keyring: files/apt/keyrings/githubcli-archive-keyring.gpg }
   broken: { source: files/apt/sources/broken.list }
+  local: { source: files/apt/sources/local.list }
 
 files:
   zsh:

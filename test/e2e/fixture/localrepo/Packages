@@ -1,0 +1,12 @@
+Package: rehome-e2e-broken
+Architecture: all
+Version: 1.0
+Maintainer: rehome e2e <e2e@example.invalid>
+Filename: ./rehome-e2e-broken_1.0_all.deb
+Size: 566
+MD5sum: fea4ff067a51252daff35aedfc32ed0f
+SHA1: 9f7bcea55efae551d06a9094fecffc518888cc5a
+SHA256: 023cad670bea2b9eecd3948ee9022bc737c6c7b6bae5bed9c42a0b81a9c6499b
+SHA512: dde901966bca24dfd1a72a2c88de9f971ad53a4f64df612ba9ad18a74bc400baa301b7f8e67a6ffb1949901220d405eaa5463742655525f4f66f57eb0ee92738
+Description: Package whose postinst always fails (rehome e2e fixture)
+

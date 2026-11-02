@@ -3,6 +3,7 @@ package apt
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -14,23 +15,35 @@ import (
 )
 
 const (
-	filesSources  = "files/apt/sources"
-	filesKeyrings = "files/apt/keyrings"
+	filesSources    = "files/apt/sources"
+	filesKeyrings   = "files/apt/keyrings"
+	filesLegacyKeys = "files/apt/trusted.gpg.d"
+	legacyKeysDir   = "/etc/apt/trusted.gpg.d"
 )
 
 var codename = regexp.MustCompile(`\b(xenial|bionic|focal|jammy|kinetic|lunar|mantic|noble|oracular|plucky|questing|resolute|buster|bullseye|bookworm|trixie|forky)\b`)
 
-// CaptureRepos describes the used third-party repos for the config and returns
-// the files to copy as config-relative destination → system source.
-func CaptureRepos(used map[string]bool) (map[string]config.AptRepo, map[string]string, error) {
+// The distribution's own keys in trusted.gpg.d ship with the OS.
+var distroKey = regexp.MustCompile(`^(ubuntu|debian)-`)
+
+type RepoCapture struct {
+	Repos map[string]config.AptRepo
+	// Keys are config-relative legacy keys for trusted.gpg.d.
+	Keys []string
+	// Copies maps config-relative destinations to system sources.
+	Copies   map[string]string
+	Warnings []string
+}
+
+// CaptureRepos describes the used third-party repos, their keyrings and legacy keys.
+func CaptureRepos(used map[string]bool, release string) (*RepoCapture, error) {
 	repos, err := ListRepos()
 
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
-	cfg := map[string]config.AptRepo{}
-	copies := map[string]string{}
+	c := &RepoCapture{Repos: map[string]config.AptRepo{}, Copies: map[string]string{}}
 
 	for _, r := range repos {
 		if !used[r.Name] {
@@ -38,30 +51,59 @@ func CaptureRepos(used map[string]bool) (map[string]config.AptRepo, map[string]s
 		}
 
 		src := filepath.Join(filesSources, filepath.Base(r.File))
-		entry := config.AptRepo{Source: src}
-		copies[src] = r.File
+		entry := config.AptRepo{Source: src, Release: release}
+		c.Copies[src] = r.File
 
 		for _, k := range r.Keyrings {
-			if _, err := os.Stat(k); err == nil {
-				entry.Keyring = filepath.Join(filesKeyrings, filepath.Base(k))
-				copies[entry.Keyring] = k
+			info, err := os.Stat(k)
 
-				break
+			if err != nil || info.Size() == 0 {
+				c.Warnings = append(c.Warnings, fmt.Sprintf("apt repo %s: keyring %s is missing or empty; the repo is broken here too", r.Name, k))
+
+				continue
 			}
+
+			dst := filepath.Join(filesKeyrings, filepath.Base(k))
+			entry.Keyrings = append(entry.Keyrings, dst)
+			c.Copies[dst] = k
 		}
 
-		cfg[r.Name] = entry
+		c.Repos[r.Name] = entry
 	}
 
-	return cfg, copies, nil
+	if len(c.Repos) > 0 {
+		c.captureLegacyKeys()
+	}
+
+	return c, nil
 }
 
-// ApplyRepos installs repo sources and keyrings, retargets them to this release and
-// refreshes apt. It returns the repos that could not be used, with the reason (spec §15.6);
+func (c *RepoCapture) captureLegacyKeys() {
+	keys, _ := filepath.Glob(legacyKeysDir + "/*")
+
+	for _, k := range keys {
+		if distroKey.MatchString(filepath.Base(k)) {
+			continue
+		}
+
+		dst := filepath.Join(filesLegacyKeys, filepath.Base(k))
+		c.Keys = append(c.Keys, dst)
+		c.Copies[dst] = k
+	}
+}
+
+// ApplyRepos installs legacy keys, repo sources and keyrings, retargets them to this release
+// and refreshes apt. It returns the repos that could not be used, with the reason (spec §15.6);
 // the error is only an apt-get update failure, which the caller reports and survives.
-func ApplyRepos(ctx context.Context, r *runner.Runner, root string, repos map[string]config.AptRepo, p platform.Platform) (map[string]string, error) {
+func ApplyRepos(ctx context.Context, r *runner.Runner, root string, repos map[string]config.AptRepo, keys []string, p platform.Platform) (map[string]string, error) {
 	installed := map[string]string{}
 	failed := map[string]string{}
+
+	for _, k := range keys {
+		if err := installFile(ctx, r, filepath.Join(root, k), filepath.Join(legacyKeysDir, filepath.Base(k))); err != nil {
+			return failed, err
+		}
+	}
 
 	for name, repo := range repos {
 		dest, err := installRepo(ctx, r, root, repo, p)
@@ -122,12 +164,10 @@ func installRepo(ctx context.Context, r *runner.Runner, root string, repo config
 		return "", err
 	}
 
-	source := Retarget(string(data), p.Codename)
+	source := Retarget(string(data), repo.Release, p.Codename)
 
-	if repo.Keyring != "" {
-		keyDest := keyringPath(source, filepath.Base(repo.Keyring))
-
-		if err := installFile(ctx, r, filepath.Join(root, repo.Keyring), keyDest); err != nil {
+	for _, k := range repo.AllKeyrings() {
+		if err := installFile(ctx, r, filepath.Join(root, k), keyringPath(source, filepath.Base(k))); err != nil {
 			return "", err
 		}
 	}
@@ -150,17 +190,25 @@ func installRepo(ctx context.Context, r *runner.Runner, root string, repo config
 	return dest, installFile(ctx, r, tmp.Name(), dest)
 }
 
-// Retarget swaps release codenames in suite fields for the target codename.
-func Retarget(source, target string) string {
-	if target == "" {
+// Retarget swaps the capture-time codename (from) in suite fields for the target codename.
+// A repo pinned to another distro's release (ngrok's "bookworm" on Ubuntu) is left alone.
+// Without a recorded release, any known codename is swapped (configs from older scans).
+func Retarget(source, from, target string) string {
+	if target == "" || from == target {
 		return source
+	}
+
+	match := codename
+
+	if from != "" {
+		match = regexp.MustCompile(`\b` + regexp.QuoteMeta(from) + `\b`)
 	}
 
 	lines := strings.Split(source, "\n")
 
 	for i, l := range lines {
 		if strings.HasPrefix(l, "Suites:") || strings.HasPrefix(l, "deb ") || strings.HasPrefix(l, "deb-src ") {
-			lines[i] = codename.ReplaceAllString(l, target)
+			lines[i] = match.ReplaceAllString(l, target)
 		}
 	}
 
@@ -170,14 +218,20 @@ func Retarget(source, target string) string {
 // keyringPath finds where the source expects the keyring, defaulting to /etc/apt/keyrings.
 func keyringPath(source, base string) string {
 	for _, m := range signedBy.FindAllStringSubmatch(source, -1) {
-		if filepath.Base(m[1]) == base {
-			return m[1]
+		for _, p := range appendPaths(nil, m[1]) {
+			if filepath.Base(p) == base {
+				return p
+			}
 		}
 	}
 
 	for _, l := range strings.Split(source, "\n") {
-		if v, ok := strings.CutPrefix(l, "Signed-By:"); ok && filepath.Base(strings.TrimSpace(v)) == base {
-			return strings.TrimSpace(v)
+		if v, ok := strings.CutPrefix(l, "Signed-By:"); ok {
+			for _, p := range appendPaths(nil, v) {
+				if filepath.Base(p) == base {
+					return p
+				}
+			}
 		}
 	}
 

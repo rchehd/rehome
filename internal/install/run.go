@@ -42,8 +42,10 @@ type executor struct {
 	opts     Options
 	progress func(Event)
 	report   *Report
-	// state per app id: done, installed, failed.
+	// state per app id: done, installed, disabled, skipped, failed.
 	state map[string]string
+	// brokenBefore holds packages dpkg already had broken; rehome only cleans up its own.
+	brokenBefore map[string]bool
 }
 
 // Execute runs the plan; a failing step never stops the others.
@@ -65,6 +67,7 @@ func Execute(ctx context.Context, r *runner.Runner, plan *Plan, opts Options, pr
 		defer stop()
 	}
 
+	x.recordBroken()
 	failedRepos := x.prepareApt(missing)
 	x.installAll(failedRepos)
 	x.restoreClaude()
@@ -149,7 +152,7 @@ func (x *executor) prepareApt(missing []string) map[string]bool {
 	}
 
 	x.progress(Event{Phase: "apt repositories"})
-	reasons, err := apt.ApplyRepos(x.ctx, x.r, x.plan.Root, repos, x.plan.Platform)
+	reasons, err := apt.ApplyRepos(x.ctx, x.r, x.plan.Root, repos, x.plan.Config.AptKeys, x.plan.Platform)
 
 	for name, reason := range reasons {
 		failed[name] = true
@@ -229,7 +232,13 @@ func (x *executor) installStep(i int, s Step, failedRepos map[string]bool) {
 	x.progress(Event{Index: i + 1, Total: len(x.plan.Steps), ID: id, Phase: "install"})
 
 	if err := s.Adapter.Install(x.ctx, x.r, s.Spec); err != nil {
-		x.fail(id, "install failed", err)
+		reason := "install failed"
+
+		if removed := x.unbreakApt(s); len(removed) > 0 {
+			reason += fmt.Sprintf("; its setup script failed, so %v were removed to keep apt working", removed)
+		}
+
+		x.fail(id, reason, err)
 
 		return
 	}
@@ -260,7 +269,12 @@ func (x *executor) batchApt(failedRepos map[string]bool) {
 
 	x.progress(Event{Phase: fmt.Sprintf("apt: %d packages", len(pkgs))})
 
+	// On failure every package is retried alone, after removing what the batch left broken.
 	if _, err := x.r.Run(x.ctx, apt.AptGet(append([]string{"install", "-y", "--"}, pkgs...)...)); err != nil {
+		if removed := x.unbreakApt(Step{Spec: config.InstallSpec{Apt: "batch"}}); len(removed) > 0 {
+			x.note("removed half-configured packages %v after their setup failed", removed)
+		}
+
 		return
 	}
 
@@ -294,6 +308,63 @@ func (x *executor) applyFiles(s Step) {
 			x.report.ManualSecrets = append(x.report.ManualSecrets, res.Dest)
 		}
 	}
+}
+
+func (x *executor) recordBroken() {
+	x.brokenBefore = map[string]bool{}
+
+	if x.plan.Platform.Key() != "debian" {
+		return
+	}
+
+	broken, _ := apt.Broken(x.ctx, x.r)
+
+	for _, p := range broken {
+		x.brokenBefore[p] = true
+	}
+
+	if len(broken) > 0 {
+		x.note("dpkg already had broken packages %v; apt installs may fail until `sudo dpkg --configure -a` succeeds", broken)
+	}
+}
+
+// unbreakApt removes packages an apt step left half-configured (e.g. a postinst that needs
+// systemd), so one bad package does not fail every later apt install.
+func (x *executor) unbreakApt(s Step) []string {
+	if s.Spec.Apt == "" || x.r.DryRun {
+		return nil
+	}
+
+	broken, err := apt.Broken(x.ctx, x.r)
+
+	if err != nil {
+		return nil
+	}
+
+	var fresh []string
+
+	for _, p := range broken {
+		if !x.brokenBefore[p] {
+			fresh = append(fresh, p)
+		}
+	}
+
+	if len(fresh) == 0 {
+		return nil
+	}
+
+	if err := apt.RemoveBroken(x.ctx, x.r, fresh); err != nil {
+		x.note("could not remove half-configured packages %v: %v", fresh, err)
+
+		// Give up on them once: retrying after every later failure only repeats this note.
+		for _, p := range fresh {
+			x.brokenBefore[p] = true
+		}
+
+		return nil
+	}
+
+	return fresh
 }
 
 func (x *executor) note(format string, args ...any) {
