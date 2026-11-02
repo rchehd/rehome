@@ -1,0 +1,72 @@
+- id: git
+  group: dev
+  install:
+    debian: { apt: git }
+  detect: { packages: [git, git-all] }
+  files:
+    linux: &gitfiles { base: "~", include: [.gitconfig, .gitignore_global, .config/git/**], exclude: [.config/git/credentials] }
+    macos: *gitfiles
+
+- id: gh
+  group: dev
+  install:
+    debian: { apt: gh, repo: github-cli }
+  detect: { packages: [gh] }
+  files:
+    linux: &ghfiles { base: ~/.config/gh, include: [config.yml] }
+    macos: *ghfiles
+
+- id: docker
+  group: dev
+  install:
+    debian: { apt: docker-ce, repo: docker }
+  detect: { packages: [docker-ce] }
+  post_install:
+    - sudo usermod -aG docker "$USER"
+
+- id: nvm
+  group: runtimes
+  install:
+    any: { script: curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash, bin: ~/.nvm/nvm.sh }
+  files:
+    linux: &npmfiles { base: "~", include: [.npmrc] }
+    macos: *npmfiles
+
+- id: uv
+  group: runtimes
+  install:
+    any: { script: curl -LsSf https://astral.sh/uv/install.sh | sh, bin: uv }
+  detect: { bins: [uv, uvx] }
+
+- id: go
+  group: runtimes
+  install:
+    debian:
+      script: >-
+        curl -fsSL "https://go.dev/dl/$(curl -fsSL 'https://go.dev/VERSION?m=text' | head -1).linux-$(dpkg --print-architecture).tar.gz" |
+        sudo tar -C /usr/local -xz
+      bin: /usr/local/go/bin/go
+  detect: { path: /usr/local/go/bin/go, packages: [golang] }
+
+- id: rustup
+  group: runtimes
+  install:
+    any: { script: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y, bin: ~/.cargo/bin/rustup }
+  detect: { path: ~/.cargo/bin/rustup }
+
+- id: pipx
+  group: runtimes
+  install:
+    debian: { apt: pipx }
+  detect: { packages: [pipx] }
+
+- id: composer
+  group: dev
+  install:
+    debian:
+      script: >-
+        tmp=$(mktemp) &&
+        curl -fsSL https://getcomposer.org/installer -o "$tmp" &&
+        sudo php "$tmp" --install-dir=/usr/local/bin --filename=composer
+      bin: composer
+  detect: { bins: [composer] }

@@ -1,0 +1,23 @@
+- id: google-chrome
+  group: browsers
+  install:
+    debian: { apt: google-chrome-stable, repo: google-chrome }
+  detect: { packages: [google-chrome-stable] }
+
+- id: firefox
+  group: browsers
+  install:
+    debian: { snap: firefox }
+  detect: { packages: [firefox] }
+
+- id: bitwarden
+  group: security
+  install:
+    debian: { snap: bitwarden }
+  detect: { packages: [bitwarden] }
+
+- id: telegram-desktop
+  group: messengers
+  install:
+    debian: { snap: telegram-desktop }
+  detect: { packages: [telegram-desktop] }
