@@ -17,6 +17,7 @@ jobs:
       - run: go build ./...
       - run: go vet ./...
       - run: test -z "$(gofmt -l .)"
+      - run: go test ./... -count=1
 
   e2e:
     needs: build
