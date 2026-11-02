@@ -1,0 +1,78 @@
+package snap
+
+import (
+	"context"
+	"regexp"
+	"strings"
+
+	"github.com/rchehd/rehome/internal/adapter"
+	"github.com/rchehd/rehome/internal/config"
+	"github.com/rchehd/rehome/internal/platform"
+	"github.com/rchehd/rehome/internal/runner"
+)
+
+// System snaps: bases, runtimes, themes and what Ubuntu preinstalls.
+var system = regexp.MustCompile(`^(core\d*|bare|snapd.*|gnome-\d.*|gtk-common-themes|mesa-\d+|kf\d+-.*|snap-store|firmware-updater)$`)
+
+type Snap struct{}
+
+func (Snap) Name() string { return "snap" }
+
+// Available does not require the binary: snapd may be installed earlier in the same run.
+func (Snap) Available(p platform.Platform) bool {
+	return p.OS == "linux"
+}
+
+func (Snap) Scan(ctx context.Context, r *runner.Runner) ([]adapter.Detected, error) {
+	if !adapter.HasCmd("snap") {
+		return nil, nil
+	}
+
+	out, err := r.Output(ctx, runner.Cmd{Name: "snap", Args: []string{"list"}})
+
+	if err != nil {
+		return nil, err
+	}
+
+	var found []adapter.Detected
+
+	for i, l := range adapter.Lines(out) {
+		f := strings.Fields(l)
+
+		if i == 0 || len(f) < 6 || system.MatchString(f[0]) || f[5] == "base" {
+			continue
+		}
+
+		spec := config.InstallSpec{Snap: f[0], Classic: strings.Contains(f[5], "classic")}
+
+		if ch := f[3]; ch != "latest/stable" && !strings.HasSuffix(ch, "/…") {
+			spec.Channel = ch
+		}
+
+		found = append(found, adapter.Detected{Manager: "snap", Name: f[0], Spec: spec})
+	}
+
+	return found, nil
+}
+
+func (Snap) Installed(ctx context.Context, r *runner.Runner, s config.InstallSpec) (bool, error) {
+	_, err := r.Output(ctx, runner.Cmd{Name: "snap", Args: []string{"list", s.Snap}})
+
+	return err == nil, nil
+}
+
+func (Snap) Install(ctx context.Context, r *runner.Runner, s config.InstallSpec) error {
+	args := []string{"install", s.Snap}
+
+	if s.Classic {
+		args = append(args, "--classic")
+	}
+
+	if s.Channel != "" {
+		args = append(args, "--channel="+s.Channel)
+	}
+
+	_, err := r.Run(ctx, runner.Cmd{Name: "snap", Args: args, Sudo: true})
+
+	return err
+}

@@ -1,0 +1,37 @@
+version: 1
+apps:
+  - id: google-chrome
+    group: browsers
+    enabled: true
+    install:
+      debian: { apt: google-chrome-stable, repo: google-chrome }
+  - id: phpstorm
+    group: editors
+    install:
+      debian: { snap: phpstorm, classic: true }
+  - id: claude-code
+    group: ai
+    install:
+      any: { script: "curl -fsSL https://claude.ai/install.sh | bash", bin: claude }
+  - id: htop
+    group: uncategorized
+    install:
+      debian: { apt: htop }
+  - id: zsh
+    group: shell
+    install:
+      debian: { apt: zsh }
+    files: zsh
+  - id: unknown-hermes # scan could not tell how this was installed
+    group: unknown
+    enabled: false
+    detected: { path: ~/.local/bin/hermes }
+
+apt_repos:
+  google-chrome:
+    source: files/apt/sources/google-chrome.sources
+    keyring: files/apt/keyrings/google-chrome.gpg
+
+files:
+  zsh:
+    - { src: files/zsh/.zshrc, dest: { linux: ~/.zshrc, macos: ~/.zshrc } }

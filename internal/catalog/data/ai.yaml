@@ -1,0 +1,43 @@
+- id: claude-code
+  group: ai
+  install:
+    any: { script: curl -fsSL https://claude.ai/install.sh | bash, bin: claude }
+  detect: { path: ~/.local/share/claude/versions/*, bins: [claude] }
+  files:
+    linux: &claudefiles
+      base: ~/.claude
+      include: ["*.md", settings.json, "statusline*", rules/**, commands/**, agents/**, hooks/**, skills/**, output-styles/**]
+      exclude: [.credentials.json, "settings.json.bak*", history.jsonl, projects/**, sessions/**, session-env/**, cache/**, file-history/**, paste-cache/**, shell-snapshots/**, debug/**, backups/**, "policy-limits*", "remote-settings*", plugins/**, skills/synced/**, "**/.trash/**", "**/*.bak*", "**/node_modules/**", "**/.git/**"]
+    macos: *claudefiles
+
+- id: codex
+  group: ai
+  install:
+    any: { npm: "@openai/codex", bin: codex }
+  detect: { path: ~/.codex/packages/standalone/releases/*, packages: ["@openai/codex"], bins: [codex] }
+  requires: [node]
+  files:
+    linux: &codexfiles
+      base: ~/.codex
+      include: [config.toml, "*.md", hooks.json, agents/**, prompts/**, skills/**, rules/**]
+      exclude: [auth.json, history.jsonl, "*.sqlite", cache/**, attachments/**, generated_images/**, "*.bak", "*.tmp-*", "**/node_modules/**", "**/.git/**"]
+    macos: *codexfiles
+
+- id: cursor-agent
+  group: ai
+  install:
+    any: { script: curl -fsSL https://cursor.com/install | bash, bin: cursor-agent }
+  detect: { path: ~/.local/share/cursor-agent/versions/*, bins: [cursor-agent, agent] }
+
+- id: rtk
+  group: ai
+  install:
+    any: { script: curl -fsSL https://raw.githubusercontent.com/rtk-ai/rtk/refs/heads/master/install.sh | sh, bin: rtk }
+  detect: { bins: [rtk] }
+
+- id: playwright-cli
+  group: ai
+  install:
+    any: { npm: "@playwright/cli", bin: playwright-cli }
+  detect: { packages: ["@playwright/cli"], bins: [playwright-cli] }
+  requires: [node]

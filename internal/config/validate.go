@@ -1,0 +1,153 @@
+package config
+
+import (
+	"fmt"
+	"regexp"
+	"strings"
+)
+
+// Validate returns every problem found; an empty slice means the config is usable.
+func (c *Config) Validate() []error {
+	var errs []error
+	ids := map[string]bool{}
+
+	for _, a := range c.Apps {
+		if a.ID == "" {
+			errs = append(errs, fmt.Errorf("app without id"))
+
+			continue
+		}
+
+		if ids[a.ID] {
+			errs = append(errs, fmt.Errorf("%s: duplicate id", a.ID))
+		}
+
+		ids[a.ID] = true
+		errs = append(errs, validateSpecs(a)...)
+	}
+
+	for _, a := range c.Apps {
+		for _, dep := range a.Requires {
+			if !ids[dep] {
+				errs = append(errs, fmt.Errorf("%s: requires unknown app %q", a.ID, dep))
+			}
+		}
+
+		if a.Files != "" && c.Files[a.Files] == nil {
+			errs = append(errs, fmt.Errorf("%s: unknown files group %q", a.ID, a.Files))
+		}
+
+		for key, s := range a.Install {
+			if s.Repo != "" && c.AptRepos[s.Repo].Source == "" {
+				errs = append(errs, fmt.Errorf("%s.%s: unknown apt repo %q", a.ID, key, s.Repo))
+			}
+		}
+	}
+
+	if cycle := c.findCycle(); cycle != nil {
+		errs = append(errs, fmt.Errorf("requires cycle: %s", strings.Join(cycle, " -> ")))
+	}
+
+	return errs
+}
+
+func validateSpecs(a App) []error {
+	var errs []error
+
+	for key, s := range a.Install {
+		n := 0
+
+		for _, m := range s.managers() {
+			if m.pkg != "" {
+				n++
+			}
+		}
+
+		if n != 1 {
+			errs = append(errs, fmt.Errorf("%s.%s: expected exactly one manager, got %d", a.ID, key, n))
+		}
+
+		if s.DebURL != "" && s.Apt == "" {
+			errs = append(errs, fmt.Errorf("%s.%s: deb_url needs the apt package name", a.ID, key))
+		}
+
+		errs = append(errs, unsafeFields(a.ID+"."+key, s)...)
+	}
+
+	return errs
+}
+
+var (
+	// Package names reach shell commands; a config from a URL must not smuggle code into them.
+	pkgName  = regexp.MustCompile(`^[A-Za-z0-9@][\w@.+/:=~-]*$`)
+	pkgArgs  = regexp.MustCompile("^[A-Za-z0-9@.][^;&|$`<>(){}'\"\\\\\n]*$")
+	plainURL = regexp.MustCompile(`^https://[^\s'"\\` + "`" + `]+$`)
+)
+
+func unsafeFields(where string, s InstallSpec) []error {
+	var errs []error
+	check := func(field, value string, re *regexp.Regexp) {
+		if value != "" && !re.MatchString(value) {
+			errs = append(errs, fmt.Errorf("%s: unsafe %s %q", where, field, value))
+		}
+	}
+
+	check("apt", s.Apt, pkgName)
+	check("snap", s.Snap, pkgName)
+	check("flatpak", s.Flatpak, pkgName)
+	check("npm", s.Npm, pkgName)
+	check("cargo", s.Cargo, pkgName)
+	check("go", s.GoPkg, pkgName)
+	check("channel", s.Channel, pkgName)
+	check("remote", s.Remote, pkgName)
+	check("pipx", s.Pipx, pkgArgs)
+	check("uv_tool", s.UvTool, pkgArgs)
+	check("deb_url", s.DebURL, plainURL)
+	check("remote_url", s.RemoteURL, plainURL)
+
+	return errs
+}
+
+func (c *Config) findCycle() []string {
+	const (
+		visiting = 1
+		done     = 2
+	)
+
+	state := map[string]int{}
+	var path []string
+	var visit func(id string) []string
+
+	visit = func(id string) []string {
+		switch state[id] {
+		case visiting:
+			return append(append([]string{}, path...), id)
+		case done:
+			return nil
+		}
+
+		state[id] = visiting
+		path = append(path, id)
+
+		if a, ok := c.App(id); ok {
+			for _, dep := range a.Requires {
+				if cycle := visit(dep); cycle != nil {
+					return cycle
+				}
+			}
+		}
+
+		path = path[:len(path)-1]
+		state[id] = done
+
+		return nil
+	}
+
+	for _, a := range c.Apps {
+		if cycle := visit(a.ID); cycle != nil {
+			return cycle
+		}
+	}
+
+	return nil
+}

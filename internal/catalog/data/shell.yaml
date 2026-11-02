@@ -1,0 +1,67 @@
+- id: zsh
+  group: shell
+  install:
+    debian: { apt: zsh }
+  detect: { packages: [zsh] }
+  files:
+    linux: &zshfiles { base: "~", include: [.zshrc, .zshenv, .zprofile, .p10k.zsh] }
+    macos: *zshfiles
+  post_install:
+    - sudo chsh -s "$(command -v zsh)" "$USER"
+
+- id: oh-my-zsh
+  group: shell
+  install:
+    any:
+      script: sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended --keep-zshrc
+      bin: ~/.oh-my-zsh/oh-my-zsh.sh
+  detect: { path: ~/.oh-my-zsh/oh-my-zsh.sh }
+  requires: [zsh]
+  files:
+    linux: &omzfiles
+      base: ~/.oh-my-zsh/custom
+      include: ["*.zsh", "themes/*.zsh-theme"]
+      exclude: [example.zsh, themes/example.zsh-theme]
+    macos: *omzfiles
+
+- id: fonts
+  group: shell
+  detect: { path: ~/.local/share/fonts/* }
+  files:
+    linux: { base: ~/.local/share/fonts, include: ["**"], exclude: ["**/.uuid"], max_size_mb: 20 }
+    macos: { base: ~/Library/Fonts, include: ["**"], exclude: ["**/.uuid"], max_size_mb: 20 }
+  post_install:
+    - command -v fc-cache >/dev/null && fc-cache -f || true
+
+- id: tmux
+  group: shell
+  install:
+    debian: { apt: tmux }
+  detect: { packages: [tmux] }
+  files:
+    linux: &tmuxfiles { base: "~", include: [.tmux.conf, .config/tmux/**] }
+    macos: *tmuxfiles
+
+- id: kitty
+  group: terminals
+  install:
+    debian: { apt: kitty }
+  detect: { packages: [kitty] }
+  files:
+    linux: { base: ~/.config/kitty, include: ["**"] }
+
+- id: terminator
+  group: terminals
+  install:
+    debian: { apt: terminator }
+  detect: { packages: [terminator] }
+  files:
+    linux: { base: ~/.config/terminator, include: [config] }
+
+- id: ghostty
+  group: terminals
+  install:
+    debian: { snap: ghostty, classic: true }
+  detect: { packages: [ghostty] }
+  files:
+    linux: { base: ~/.config/ghostty, include: ["**"] }
