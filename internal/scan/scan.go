@@ -15,6 +15,7 @@ import (
 	"github.com/rchehd/rehome/internal/binaries"
 	"github.com/rchehd/rehome/internal/catalog"
 	"github.com/rchehd/rehome/internal/config"
+	"github.com/rchehd/rehome/internal/discover"
 	"github.com/rchehd/rehome/internal/files"
 	"github.com/rchehd/rehome/internal/platform"
 	"github.com/rchehd/rehome/internal/runner"
@@ -27,19 +28,31 @@ type Result struct {
 	Findings    []secrets.Finding
 	Unknown     []string
 	Warnings    []string
+	// Attention lists what scan could not take by itself, each with an action for the user.
+	Attention []discover.Warning
 }
 
 type scanner struct {
+	ctx  context.Context
+	r    *runner.Runner
 	p    platform.Platform
 	cat  *catalog.Catalog
 	root string
 	apps map[string]*config.App
 	res  *Result
+	// hints are extra names (package, binaries) used to find an app's settings.
+	hints map[string][]string
+	// existing is the config already in root; its capture rules are honoured.
+	existing *config.Config
 }
 
 // Run detects installed software and settings; nothing is written.
 func Run(ctx context.Context, r *runner.Runner, p platform.Platform, cat *catalog.Catalog, root string) (*Result, error) {
-	s := &scanner{p: p, cat: cat, root: root, apps: map[string]*config.App{}, res: &Result{}}
+	s := &scanner{ctx: ctx, r: r, p: p, cat: cat, root: root, apps: map[string]*config.App{}, res: &Result{}, hints: map[string][]string{}, existing: &config.Config{}}
+
+	if cfg, _, err := config.Load(root); err == nil {
+		s.existing = cfg
+	}
 
 	for _, a := range all.For(p) {
 		found, err := a.Scan(ctx, r)
@@ -80,7 +93,7 @@ func Run(ctx context.Context, r *runner.Runner, p platform.Platform, cat *catalo
 	}
 
 	cfg := s.res.Config
-	s.res.Config = &config.Config{Version: config.CurrentVersion, Apps: s.sortedApps(), AptRepos: cfg.AptRepos, AptKeys: cfg.AptKeys, Files: cfg.Files}
+	s.res.Config = &config.Config{Version: config.CurrentVersion, Apps: s.sortedApps(), AptRepos: cfg.AptRepos, AptKeys: cfg.AptKeys, Files: cfg.Files, Capture: cfg.Capture}
 
 	return s.res, nil
 }
@@ -94,6 +107,7 @@ func (s *scanner) addAll(found []adapter.Detected) {
 func (s *scanner) add(d adapter.Detected) {
 	entry, ok := s.cat.Match(d)
 	app := &config.App{ID: appID(d), Group: d.Manager, Requires: d.Requires}
+	defer func() { s.hints[app.ID] = append(s.hints[app.ID], d.Name, d.Meta["bin"]) }()
 
 	if ok {
 		app.ID, app.Group = entry.ID, entry.Group
@@ -240,6 +254,9 @@ func (s *scanner) captureFiles() error {
 		s.res.Config.Files[app.Files] = fileMaps
 		s.addChanges(changes)
 	}
+
+	s.captureByRules()
+	s.res.Attention = append(s.res.Attention, unclaimedConfigDirs(s.res.Config, s.cat, s.p.FileKey())...)
 
 	if _, ok := s.apps["claude-code"]; ok {
 		changes, err := ai.CaptureClaude(s.root)

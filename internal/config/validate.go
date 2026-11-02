@@ -53,6 +53,18 @@ func (c *Config) Validate() []error {
 		}
 	}
 
+	for id, byKey := range c.Capture {
+		for key, rule := range byKey {
+			if key != "linux" && key != "macos" {
+				errs = append(errs, fmt.Errorf("capture %s: unknown file key %q (linux or macos)", id, key))
+			}
+
+			if rule.Base == "" || len(rule.Include) == 0 {
+				errs = append(errs, fmt.Errorf("capture %s.%s: base and include are required", id, key))
+			}
+		}
+	}
+
 	if cycle := c.findCycle(); cycle != nil {
 		errs = append(errs, fmt.Errorf("requires cycle: %s", strings.Join(cycle, " -> ")))
 	}

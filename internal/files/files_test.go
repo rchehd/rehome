@@ -369,3 +369,19 @@ func TestUnifiedTooLarge(t *testing.T) {
 		t.Errorf("diff = %q", got[:min(len(got), 80)])
 	}
 }
+
+func TestCaptureRulesUserRule(t *testing.T) {
+	base := t.TempDir()
+	root := t.TempDir()
+	put(t, filepath.Join(base, "config.fish"), "set -g fish_greeting\n")
+	rules := map[string]config.FileRule{"linux": {Base: base, Include: []string{"*.fish"}}}
+	changes, maps, err := CaptureRules("fish", rules, "linux", root)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(changes) != 1 || changes[0].Dst != "files/fish/config.fish" || maps[0].Dest["linux"] != filepath.Join(base, "config.fish") {
+		t.Errorf("changes %v maps %v", changes, maps)
+	}
+}

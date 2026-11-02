@@ -58,6 +58,7 @@ check "--upgrade raises it to the lock version" '[ "$(cowsay_version)" = "1.6.0"
 check "an older lock never downgrades" 'sed -i "s/version: 1.6.0/version: 1.5.0/" $home/cfg/rehome.lock && as_dev "./rehome install --yes --versions locked --config cfg" >/dev/null 2>&1; [ "$(cowsay_version)" = "1.6.0" ]'
 
 echo "== scan"
+as_dev "mkdir -p .config/mc .config/mystery && printf '[Midnight-Commander]\nskin=dark\n' > .config/mc/ini && echo '{}' > .config/mystery/settings.json"
 as_dev "mkdir -p scanned && ./rehome scan --yes --config scanned" > /tmp/scan.log 2>&1
 cat /tmp/scan.log
 check "scan finds apt package" 'grep -q "id: htop" $home/scanned/rehome.yml'
@@ -65,6 +66,8 @@ check "scan links gh to its repo" 'grep -q "repo: github-cli" $home/scanned/reho
 check "scan finds script install" 'grep -q "id: oh-my-zsh" $home/scanned/rehome.yml'
 check "scan finds uv tool" 'grep -q "uv_tool: ruff" $home/scanned/rehome.yml'
 check "scan records versions in rehome.lock" 'grep -A3 "cowsay:" $home/scanned/rehome.lock | grep -q "version: 1.6.0"'
+check "settings of an app outside the catalog found automatically" 'grep -q "origin: auto" $home/scanned/rehome.yml && [ -f $home/scanned/files/mc/.config/mc/ini ]'
+check "unclaimed config dir reported with an action" 'grep -q "~/.config/mystery: no app claims it" /tmp/scan.log'
 check "scanned config is valid" 'as_dev "./rehome debug config --config scanned" | grep -q " 0 errors"'
 
 echo "== $failures failure(s)"

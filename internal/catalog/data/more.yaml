@@ -1,0 +1,100 @@
+- id: bash
+  group: shell
+  detect: { path: ~/.bashrc }
+  files:
+    linux: &bashfiles { base: "~", include: [.bashrc, .bash_aliases, .bash_profile, .profile, .inputrc] }
+    macos: *bashfiles
+
+- id: fish
+  group: shell
+  install:
+    debian: { apt: fish }
+  detect: { packages: [fish] }
+  files:
+    linux: &fishfiles { base: ~/.config/fish, include: ["**"], exclude: [fish_history] }
+    macos: *fishfiles
+
+- id: nushell
+  group: shell
+  detect: { bins: [nu], path: ~/.config/nushell }
+  files:
+    linux: { base: ~/.config/nushell, include: ["**"], exclude: [history.txt, history.sqlite3] }
+
+- id: starship
+  group: shell
+  install:
+    any: { script: curl -fsSL https://starship.rs/install.sh | sh -s -- -y, bin: starship }
+  detect: { bins: [starship] }
+  files:
+    linux: &starshipfiles { base: ~/.config, include: [starship.toml] }
+    macos: *starshipfiles
+
+- id: gtk
+  group: desktop
+  detect: { path: ~/.config/gtk-3.0 }
+  files:
+    linux: { base: ~/.config, include: [gtk-3.0/bookmarks, gtk-3.0/settings.ini, gtk-3.0/gtk.css, gtk-4.0/settings.ini, gtk-4.0/gtk.css] }
+
+- id: neovim
+  group: editors
+  install:
+    debian: { apt: neovim }
+  detect: { packages: [neovim], bins: [nvim] }
+  files:
+    linux: &nvimfiles { base: ~/.config/nvim, include: ["**"] }
+    macos: *nvimfiles
+
+- id: vim
+  group: editors
+  install:
+    debian: { apt: vim }
+  detect: { packages: [vim, vim-gtk3] }
+  files:
+    linux: &vimfiles { base: "~", include: [.vimrc, .vim/**], exclude: [.vim/undo/**, .vim/swap/**, .vim/backup/**, "**/.netrwhist"] }
+    macos: *vimfiles
+
+- id: alacritty
+  group: terminals
+  install:
+    debian: { apt: alacritty }
+  detect: { packages: [alacritty] }
+  files:
+    linux: &alacrittyfiles { base: ~/.config/alacritty, include: ["**"] }
+    macos: *alacrittyfiles
+
+- id: wezterm
+  group: terminals
+  detect: { bins: [wezterm], packages: [wezterm] }
+  files:
+    linux: &weztermfiles { base: "~", include: [.wezterm.lua, .config/wezterm/**] }
+    macos: *weztermfiles
+
+- id: vscode
+  group: editors
+  detect: { packages: [code], bins: [code] }
+  files:
+    linux: { base: ~/.config/Code/User, include: [settings.json, keybindings.json, snippets/**] }
+    macos: { base: ~/Library/Application Support/Code/User, include: [settings.json, keybindings.json, snippets/**] }
+
+- id: htop
+  group: tools
+  install:
+    debian: { apt: htop }
+  detect: { packages: [htop] }
+  files:
+    linux: { base: ~/.config/htop, include: [htoprc] }
+
+- id: btop
+  group: tools
+  install:
+    debian: { apt: btop }
+  detect: { packages: [btop] }
+  files:
+    linux: { base: ~/.config/btop, include: [btop.conf, themes/**] }
+
+- id: lazygit
+  group: dev
+  detect: { bins: [lazygit] }
+  files:
+    linux: &lazygitfiles { base: ~/.config/lazygit, include: [config.yml] }
+    macos: *lazygitfiles

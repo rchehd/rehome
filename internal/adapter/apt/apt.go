@@ -253,3 +253,24 @@ func IsOfficial(uri string) bool {
 
 	return slices.ContainsFunc(hosts, func(h string) bool { return strings.Contains(uri, h) })
 }
+
+// Binaries lists the commands a package installs; their names hint where settings live.
+func Binaries(ctx context.Context, r *runner.Runner, pkg string) []string {
+	out, err := r.Output(ctx, runner.Cmd{Name: "dpkg", Args: []string{"-L", "--", pkg}})
+
+	if err != nil {
+		return nil
+	}
+
+	var bins []string
+
+	for _, l := range adapter.Lines(out) {
+		for _, dir := range []string{"/usr/bin/", "/usr/sbin/", "/usr/games/", "/bin/"} {
+			if name, ok := strings.CutPrefix(l, dir); ok && name != "" && !strings.Contains(name, "/") {
+				bins = append(bins, name)
+			}
+		}
+	}
+
+	return bins
+}

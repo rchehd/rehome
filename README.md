@@ -48,6 +48,19 @@ present, `--overwrite-files` to replace differing settings (a `.rehome.bak` is k
   and Codex (rules, skills, agents, hooks, MCP servers, plugins)
 - **Unknown binaries** are listed disabled, so nothing is lost; add an install method to enable them
 
+Settings of apps outside the catalog are found automatically in the usual places (`~/.config/<app>`, `~/.<app>`,
+`~/.<app>rc`, flatpak and snap config dirs), skipping caches, logs and databases. They are recorded under `capture`
+with `origin: auto`; edit or add your own rules there and the next scan follows them:
+
+```yaml
+capture:
+  myapp:
+    linux: { base: ~/.config/myapp, include: ["*.toml", "themes/**"] }
+```
+
+Anything rehome cannot take by itself — a settings folder too large to copy whole, a `~/.config` folder no app claims,
+an unknown binary — is listed under **needs your attention** with what to do about it.
+
 Secrets are never written: tokens, passwords and keys in settings files are replaced with `<rehome:redacted>`,
 and `rehome push` refuses to push anything that still looks like a secret. Log in again after installing.
 
