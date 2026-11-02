@@ -22,12 +22,14 @@ const (
 )
 
 type ApplyResult struct {
-	Src, Dest string
-	Status    string
+	Src    string `json:"src"`
+	Dest   string `json:"dest"`
+	Status string `json:"status"`
 	// Redacted means the written file still holds placeholders to fill in by hand.
-	Redacted bool
+	Redacted bool `json:"redacted,omitempty"`
 	// Local and Repo are set for kept-local files so a caller can show the diff.
-	Local, Repo []byte
+	Local []byte `json:"-"`
+	Repo  []byte `json:"-"`
 }
 
 type ApplyOptions struct {

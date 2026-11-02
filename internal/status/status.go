@@ -17,17 +17,17 @@ import (
 
 type Status struct {
 	// Missing are enabled config apps not installed here.
-	Missing []string
+	Missing []string `json:"missing"`
 	// New are apps installed here but absent from the config.
-	New []string
+	New []string `json:"new"`
 	// ChangedFiles are settings that differ between the system and files/.
-	ChangedFiles []string
+	ChangedFiles []string `json:"changed_files"`
 	// Behind are installed apps older than the lock ("id 1.2 → 1.3").
-	Behind []string
+	Behind []string `json:"behind_lock"`
 	// NotSynced are versions changed here that the next scan would record in the lock.
-	NotSynced []string
+	NotSynced []string `json:"not_in_lock"`
 	// Unsupported have no installer for this OS; informational, not a difference.
-	Unsupported []string
+	Unsupported []string `json:"unsupported"`
 }
 
 func (s *Status) Clean() bool {

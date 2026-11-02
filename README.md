@@ -70,6 +70,35 @@ and `rehome push` refuses to push anything that still looks like a secret. Log i
 - Re-running is safe: present apps are skipped, local settings are never overwritten without asking.
 - Third-party apt repos are retargeted to the new release; repos that fail are disabled and reported.
 
+## Changing the config from the command line
+
+```bash
+rehome config add-install hermes --platform any --script 'curl -fsSL https://…/install.sh | bash' --bin hermes
+rehome config add-capture myapp --base ~/.config/myapp --include '*.toml'
+rehome config set steam enabled=false skip=macos
+```
+
+Comments in `rehome.yml` are kept, and a change that would make the config invalid is refused.
+
+## Using with an AI agent
+
+`rehome mcp` serves rehome to agents over MCP. Register it with every agent found on this machine
+(Claude Code, Codex, Cursor) in one go:
+
+```bash
+rehome mcp install
+```
+
+For any other MCP client, add a stdio server with command `rehome` and argument `mcp`:
+
+```json
+{ "mcpServers": { "rehome": { "command": "rehome", "args": ["mcp"] } } }
+```
+
+The agent can scan, read status and what needs your attention, and fix the config (`add_install`, `add_capture`,
+`set_app`). It never installs: installing needs `sudo` in your terminal, so the agent shows you the plan and the exact
+command to run. Every command also takes `--json` for scripts.
+
 ## Versions
 
 `rehome scan` also writes `rehome.lock` next to the config, with the version of every app it can read. On install:

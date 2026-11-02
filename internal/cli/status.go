@@ -1,15 +1,9 @@
 package cli
 
 import (
-	"os"
-	"path/filepath"
-
 	"github.com/spf13/cobra"
 
-	"github.com/rchehd/rehome/internal/catalog"
-	"github.com/rchehd/rehome/internal/config"
-	"github.com/rchehd/rehome/internal/lock"
-	"github.com/rchehd/rehome/internal/platform"
+	"github.com/rchehd/rehome/internal/app"
 	"github.com/rchehd/rehome/internal/status"
 )
 
@@ -24,7 +18,16 @@ func newStatusCmd() *cobra.Command {
 				return err
 			}
 
-			st.Print(cmd.OutOrStdout())
+			if flags.json {
+				if err := report(cmd, struct {
+					Clean bool `json:"clean"`
+					*status.Status
+				}{st.Clean(), st}, ""); err != nil {
+					return err
+				}
+			} else {
+				st.Print(cmd.OutOrStdout())
+			}
 
 			if !st.Clean() {
 				return ExitError{Code: 1}
@@ -36,47 +39,5 @@ func newStatusCmd() *cobra.Command {
 }
 
 func computeStatus(cmd *cobra.Command) (*status.Status, error) {
-	cfg, root, err := loadConfig(cmd)
-
-	if err != nil {
-		return nil, err
-	}
-
-	existing, err := os.ReadFile(filepath.Join(root, config.FileName))
-
-	if err != nil {
-		return nil, err
-	}
-
-	p, err := platform.Detect()
-
-	if err != nil {
-		return nil, err
-	}
-
-	cat, err := catalog.Load()
-
-	if err != nil {
-		return nil, err
-	}
-
-	repo, err := lock.Load(lock.Path(root, flags.lock))
-
-	if err != nil {
-		return nil, err
-	}
-
-	localPath, err := lock.LocalPath()
-
-	if err != nil {
-		return nil, err
-	}
-
-	local, err := lock.Load(localPath)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return status.Compute(cmd.Context(), newRunner(), cfg, existing, root, p, cat, repo, local)
+	return app.Status(cmd.Context(), opts(cmd))
 }
