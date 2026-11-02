@@ -4,6 +4,8 @@ apps:
     install: { debian: { apt: rehome-e2e-broken, repo: local } }
   - id: htop
     install: { debian: { apt: htop } }
+  - id: mc # not in the catalog: scan must find ~/.config/mc by itself
+    install: { debian: { apt: mc } }
   - id: zsh
     group: shell
     install: { debian: { apt: zsh } }

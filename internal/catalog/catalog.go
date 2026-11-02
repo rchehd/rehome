@@ -6,7 +6,6 @@ import (
 	"io/fs"
 	"path/filepath"
 	"regexp"
-	"strings"
 
 	"gopkg.in/yaml.v3"
 
@@ -36,14 +35,8 @@ type Detect struct {
 	Path string `yaml:"path"`
 }
 
-// FileRule selects settings files under Base; globs are relative and support **.
-type FileRule struct {
-	Base    string   `yaml:"base"`
-	Include []string `yaml:"include"`
-	Exclude []string `yaml:"exclude"`
-	// MaxSizeMB overrides the default per-file size limit.
-	MaxSizeMB int `yaml:"max_size_mb"`
-}
+// FileRule is the shared settings-file rule (see config.FileRule).
+type FileRule = config.FileRule
 
 type Catalog struct {
 	Entries []Entry
@@ -156,47 +149,6 @@ func (e *Entry) spec(platformKey string) (config.InstallSpec, bool) {
 	return config.App{Install: e.Install}.Spec(platformKey)
 }
 
-// Matches reports whether a relative path is selected by the rule.
-func (r FileRule) Matches(rel string) bool {
-	return anyGlob(r.Include, rel) && !anyGlob(r.Exclude, rel)
-}
-
-func (r FileRule) Excludes(rel string) bool {
-	return anyGlob(r.Exclude, rel)
-}
-
-func anyGlob(patterns []string, rel string) bool {
-	for _, p := range patterns {
-		if globRegexp(p).MatchString(rel) {
-			return true
-		}
-	}
-
-	return false
-}
-
 func globRegexp(pattern string) *regexp.Regexp {
-	var b strings.Builder
-	b.WriteString("^")
-
-	for i := 0; i < len(pattern); i++ {
-		switch ch := pattern[i]; {
-		case strings.HasPrefix(pattern[i:], "**/"):
-			b.WriteString("(.*/)?")
-			i += 2
-		case strings.HasPrefix(pattern[i:], "**"):
-			b.WriteString(".*")
-			i++
-		case ch == '*':
-			b.WriteString("[^/]*")
-		case ch == '?':
-			b.WriteString("[^/]")
-		default:
-			b.WriteString(regexp.QuoteMeta(string(ch)))
-		}
-	}
-
-	b.WriteString("$")
-
-	return regexp.MustCompile(b.String())
+	return config.GlobRegexp(pattern)
 }

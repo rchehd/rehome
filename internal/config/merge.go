@@ -67,6 +67,13 @@ func Merge(existing []byte, scanned *Config, platformKey string) ([]byte, MergeR
 	}
 
 	keysChanged := mergeList(root, "apt_keys", scanned.AptKeys)
+	captureChanged, err := mergeMap(root, "capture", scanned.Capture)
+
+	if err != nil {
+		return nil, report, err
+	}
+
+	keysChanged = keysChanged || captureChanged
 	reposChanged = reposChanged || reposUpdated || keysChanged
 
 	filesChanged, err := mergeFiles(root, scanned.Files)

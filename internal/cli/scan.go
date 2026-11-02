@@ -156,6 +156,34 @@ func printScanSummary(cmd *cobra.Command, sp *scanPlan) {
 		cmd.Printf("  redacted secret: %s line %d (%s)\n", f.Path, f.Line, f.Key)
 	}
 
+	auto := 0
+
+	for _, byKey := range r.Config.Capture {
+		for _, rule := range byKey {
+			if rule.Origin == config.OriginAuto {
+				auto++
+			}
+		}
+	}
+
+	if auto > 0 {
+		cmd.Printf("settings found automatically for %d apps outside the catalog (capture: origin auto)\n", auto)
+	}
+
+	if len(r.Attention) > 0 {
+		cmd.Printf("needs your attention (%d):\n", len(r.Attention))
+
+		for _, a := range r.Attention {
+			who := a.Path
+
+			if a.ID != "" {
+				who = a.ID + " (" + a.Path + ")"
+			}
+
+			cmd.Printf("  ! %s: %s — %s\n", who, a.Reason, a.Action)
+		}
+	}
+
 	for _, w := range r.Warnings {
 		cmd.Printf("warning: %s\n", w)
 	}

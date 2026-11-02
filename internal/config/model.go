@@ -21,6 +21,8 @@ type Config struct {
 	Files   map[string][]FileMap `yaml:"files,omitempty"`
 	// Ignore lists app ids a given machine (by hostname) never installs.
 	Ignore map[string][]string `yaml:"ignore,omitempty"`
+	// Capture holds settings rules per app id and file key (linux, macos) beyond the catalog.
+	Capture map[string]map[string]FileRule `yaml:"capture,omitempty"`
 }
 
 type App struct {

@@ -25,11 +25,17 @@ type Change struct {
 	Findings []secrets.Finding
 }
 
-// Capture collects an app's settings files: changes to write and the file mappings for the config.
+// Capture collects an app's settings files by its catalog rules.
 func Capture(e *catalog.Entry, fileKey, root string) ([]Change, []config.FileMap, error) {
-	rule, ok := e.Rule(fileKey)
+	return CaptureRules(e.ID, e.Files, fileKey, root)
+}
 
-	if !ok {
+// CaptureRules collects settings files by rules per file key: changes to write and the
+// file mappings for the config.
+func CaptureRules(id string, rules map[string]config.FileRule, fileKey, root string) ([]Change, []config.FileMap, error) {
+	rule, ok := rules[fileKey]
+
+	if !ok || rule.Base == "" {
 		return nil, nil, nil
 	}
 
@@ -62,8 +68,12 @@ func Capture(e *catalog.Entry, fileKey, root string) ([]Change, []config.FileMap
 			return nil, nil, err
 		}
 
-		dst := path.Join("files", e.ID, filepath.ToSlash(rel))
-		maps = append(maps, fileMap(e, dst, rel))
+		if rule.TextOnly && secrets.IsBinary(raw) {
+			continue
+		}
+
+		dst := path.Join("files", id, filepath.ToSlash(rel))
+		maps = append(maps, fileMap(rules, dst, rel))
 		redacted, findings := secrets.Redact(adapter.Tilde(src), raw)
 		old, _ := os.ReadFile(filepath.Join(root, dst))
 
@@ -117,11 +127,11 @@ func WriteChanges(root string, cs []Change) error {
 	return nil
 }
 
-func fileMap(e *catalog.Entry, dst, rel string) config.FileMap {
+func fileMap(rules map[string]config.FileRule, dst, rel string) config.FileMap {
 	m := config.FileMap{Src: dst, Dest: map[string]string{}}
 
 	for _, key := range []string{"linux", "macos"} {
-		if r, ok := e.Rule(key); ok {
+		if r, ok := rules[key]; ok && r.Base != "" {
 			m.Dest[key] = path.Join(r.Base, filepath.ToSlash(rel))
 		}
 	}
@@ -129,8 +139,13 @@ func fileMap(e *catalog.Entry, dst, rel string) config.FileMap {
 	return m
 }
 
+// Select lists the files a rule picks under base, relative to it.
+func Select(base string, rule config.FileRule) ([]string, error) {
+	return selectFiles(base, rule)
+}
+
 // selectFiles walks only the directories an include pattern can reach.
-func selectFiles(base string, rule catalog.FileRule) ([]string, error) {
+func selectFiles(base string, rule config.FileRule) ([]string, error) {
 	seen := map[string]bool{}
 	var rels []string
 
@@ -185,6 +200,11 @@ func selectFiles(base string, rule catalog.FileRule) ([]string, error) {
 	return rels, nil
 }
 
+// StaticPrefix is the leading part of a glob without wildcards.
+func StaticPrefix(pattern string) string {
+	return staticPrefix(pattern)
+}
+
 // staticPrefix is the leading part of a glob without wildcards: "skills/**" → "skills".
 func staticPrefix(pattern string) string {
 	segs := strings.Split(pattern, "/")
@@ -223,6 +243,6 @@ func couldContain(pattern, dir string) bool {
 	return true
 }
 
-func excludedDir(rule catalog.FileRule, dir string) bool {
+func excludedDir(rule config.FileRule, dir string) bool {
 	return !rule.Matches(dir+"/.probe") && !rule.Matches(dir+"/x/.probe") && rule.Excludes(dir+"/.probe")
 }
