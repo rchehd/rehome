@@ -121,6 +121,37 @@ func AptGet(args ...string) runner.Cmd {
 	return runner.Cmd{Name: "env", Args: append([]string{"DEBIAN_FRONTEND=noninteractive", "apt-get"}, args...), Sudo: true}
 }
 
+// Unavailable returns the packages apt has no installation candidate for.
+func Unavailable(ctx context.Context, r *runner.Runner, pkgs []string) ([]string, error) {
+	out, err := r.Output(ctx, runner.Cmd{Name: "apt-cache", Args: append([]string{"policy", "--"}, pkgs...)})
+
+	if err != nil {
+		return nil, err
+	}
+
+	candidate := map[string]bool{}
+	var pkg string
+
+	for _, l := range strings.Split(out, "\n") {
+		switch {
+		case l != "" && l[0] != ' ':
+			pkg = strings.TrimSuffix(strings.TrimSpace(l), ":")
+		case strings.HasPrefix(strings.TrimSpace(l), "Candidate:"):
+			candidate[pkg] = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(l), "Candidate:")) != "(none)"
+		}
+	}
+
+	var missing []string
+
+	for _, p := range pkgs {
+		if !candidate[p] {
+			missing = append(missing, p)
+		}
+	}
+
+	return missing, nil
+}
+
 // Origins maps each package to the archive URI its installed version came from, or dpkg-only.
 func Origins(ctx context.Context, r *runner.Runner, pkgs []string) (map[string]string, error) {
 	origins := map[string]string{}

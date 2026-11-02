@@ -234,7 +234,7 @@ func (x *executor) installStep(i int, s Step, failedRepos map[string]bool) {
 	if err := s.Adapter.Install(x.ctx, x.r, s.Spec); err != nil {
 		reason := "install failed"
 
-		if removed := x.unbreakApt(s); len(removed) > 0 {
+		if removed := x.unbreakApt(); s.Spec.Apt != "" && len(removed) > 0 {
 			reason += fmt.Sprintf("; its setup script failed, so %v were removed to keep apt working", removed)
 		}
 
@@ -252,35 +252,77 @@ func (x *executor) installStep(i int, s Step, failedRepos map[string]bool) {
 	x.done(id)
 }
 
-// batchApt installs plain repo packages in one apt-get call; on failure each is retried alone.
+// batchApt installs plain repo packages in one apt-get call. Packages apt cannot find fail
+// up front (one unknown name would reject the whole call); a setup failure removes the broken
+// package and retries the batch once; only what still fails is retried one by one.
 func (x *executor) batchApt(failedRepos map[string]bool) {
-	var pkgs, ids []string
+	byPkg := map[string]string{}
+	var pkgs []string
 
 	for _, s := range x.plan.Steps {
 		if s.Status == StatusInstall && s.Spec.Apt != "" && s.Spec.DebURL == "" && len(s.App.Requires) == 0 && !failedRepos[s.Spec.Repo] {
+			byPkg[s.Spec.Apt] = s.App.ID
 			pkgs = append(pkgs, s.Spec.Apt)
-			ids = append(ids, s.App.ID)
 		}
 	}
 
-	if len(pkgs) < 2 {
+	if len(pkgs) < 2 || x.r.DryRun {
 		return
 	}
 
-	x.progress(Event{Phase: fmt.Sprintf("apt: %d packages", len(pkgs))})
+	missing, err := apt.Unavailable(x.ctx, x.r, pkgs)
 
-	// On failure every package is retried alone, after removing what the batch left broken.
-	if _, err := x.r.Run(x.ctx, apt.AptGet(append([]string{"install", "-y", "--"}, pkgs...)...)); err != nil {
-		if removed := x.unbreakApt(Step{Spec: config.InstallSpec{Apt: "batch"}}); len(removed) > 0 {
-			x.note("removed half-configured packages %v after their setup failed", removed)
+	if err == nil {
+		for _, p := range missing {
+			x.fail(byPkg[p], "package not found in the configured apt repositories", nil)
 		}
 
-		return
+		pkgs = without(pkgs, missing)
 	}
 
-	for _, id := range ids {
-		x.done(id)
+	for attempt := 0; attempt < 2 && len(pkgs) > 0; attempt++ {
+		x.progress(Event{Phase: fmt.Sprintf("apt: %d packages", len(pkgs))})
+
+		if _, err := x.r.Run(x.ctx, apt.AptGet(append([]string{"install", "-y", "--"}, pkgs...)...)); err == nil {
+			for _, p := range pkgs {
+				x.done(byPkg[p])
+			}
+
+			return
+		}
+
+		removed := x.unbreakApt()
+
+		if len(removed) == 0 {
+			return
+		}
+
+		for _, p := range removed {
+			if id, ok := byPkg[p]; ok {
+				x.fail(id, fmt.Sprintf("its setup script failed, so %v were removed to keep apt working", removed), nil)
+			}
+		}
+
+		pkgs = without(pkgs, removed)
 	}
+}
+
+func without(list, drop []string) []string {
+	skip := map[string]bool{}
+
+	for _, d := range drop {
+		skip[d] = true
+	}
+
+	var kept []string
+
+	for _, v := range list {
+		if !skip[v] {
+			kept = append(kept, v)
+		}
+	}
+
+	return kept
 }
 
 func (x *executor) applyFiles(s Step) {
@@ -330,8 +372,8 @@ func (x *executor) recordBroken() {
 
 // unbreakApt removes packages an apt step left half-configured (e.g. a postinst that needs
 // systemd), so one bad package does not fail every later apt install.
-func (x *executor) unbreakApt(s Step) []string {
-	if s.Spec.Apt == "" || x.r.DryRun {
+func (x *executor) unbreakApt() []string {
+	if x.plan.Platform.Key() != "debian" || x.r.DryRun {
 		return nil
 	}
 
