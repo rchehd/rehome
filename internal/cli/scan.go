@@ -34,7 +34,7 @@ func newScanCmd() *cobra.Command {
 				return nil
 			}
 
-			if !plan.report.Changed() && len(plan.result.FileChanges) == 0 {
+			if !plan.report.Changed() && len(plan.result.FileChanges) == 0 && !plan.lock.changed() {
 				cmd.Println("config is up to date")
 
 				return nil
@@ -62,6 +62,7 @@ type scanPlan struct {
 	merged   []byte
 	report   config.MergeReport
 	result   *scan.Result
+	lock     *lockPlan
 }
 
 func prepareScan(cmd *cobra.Command) (*scanPlan, error) {
@@ -106,7 +107,10 @@ func prepareScan(cmd *cobra.Command) (*scanPlan, error) {
 	merged, findings := secrets.Redact(config.FileName, merged)
 	res.Findings = append(res.Findings, findings...)
 
-	return &scanPlan{root: root, existing: existing, merged: merged, report: report, result: res}, nil
+	sp := &scanPlan{root: root, existing: existing, merged: merged, report: report, result: res}
+	sp.lock, err = prepareLock(cmd, sp, p)
+
+	return sp, err
 }
 
 func (sp *scanPlan) write(changes []files.Change) error {
@@ -114,7 +118,11 @@ func (sp *scanPlan) write(changes []files.Change) error {
 		return err
 	}
 
-	return os.WriteFile(filepath.Join(sp.root, config.FileName), sp.merged, 0o644)
+	if err := os.WriteFile(filepath.Join(sp.root, config.FileName), sp.merged, 0o644); err != nil {
+		return err
+	}
+
+	return sp.lock.write()
 }
 
 func printScanSummary(cmd *cobra.Command, sp *scanPlan) {
@@ -142,6 +150,7 @@ func printScanSummary(cmd *cobra.Command, sp *scanPlan) {
 	}
 
 	cmd.Printf("settings files: %d new, %d changed\n", newFiles, modified)
+	cmd.Printf("lock: %d versions recorded, %d changed in %s\n", len(sp.lock.current), len(sp.lock.changes), sp.lock.path)
 
 	for _, f := range r.Findings {
 		cmd.Printf("  redacted secret: %s line %d (%s)\n", f.Path, f.Line, f.Key)

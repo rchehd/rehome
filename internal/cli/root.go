@@ -15,6 +15,7 @@ var Version = "dev"
 
 type globalFlags struct {
 	config  string
+	lock    string
 	dryRun  bool
 	verbose bool
 }
@@ -48,6 +49,7 @@ func newRoot() *cobra.Command {
 	root.SetOut(os.Stdout)
 	pf := root.PersistentFlags()
 	pf.StringVar(&flags.config, "config", "", "config file path or URL")
+	pf.StringVar(&flags.lock, "lock", "", "lock file path (default: rehome.lock next to the config)")
 	pf.BoolVar(&flags.dryRun, "dry-run", false, "print what would be done without changing anything")
 	pf.BoolVarP(&flags.verbose, "verbose", "v", false, "print every command")
 

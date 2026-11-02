@@ -1,5 +1,10 @@
 package config
 
+import (
+	"os"
+	"slices"
+)
+
 const (
 	FileName       = "rehome.yml"
 	CurrentVersion = 1
@@ -14,19 +19,25 @@ type Config struct {
 	// AptKeys are legacy keys for /etc/apt/trusted.gpg.d, used by repos without signed-by.
 	AptKeys []string             `yaml:"apt_keys,omitempty"`
 	Files   map[string][]FileMap `yaml:"files,omitempty"`
+	// Ignore lists app ids a given machine (by hostname) never installs.
+	Ignore map[string][]string `yaml:"ignore,omitempty"`
 }
 
 type App struct {
 	ID    string `yaml:"id"`
 	Group string `yaml:"group,omitempty"`
 	// Enabled is nil when the user never set it, which means enabled.
-	Enabled       *bool                  `yaml:"enabled,omitempty"`
-	Install       map[string]InstallSpec `yaml:"install,omitempty"`
-	Files         string                 `yaml:"files,omitempty"`
-	Requires      []string               `yaml:"requires,omitempty"`
-	PostInstall   []string               `yaml:"post_install,omitempty"`
-	Detected      map[string]string      `yaml:"detected,omitempty"`
-	MissingOnScan bool                   `yaml:"missing_on_scan,omitempty"`
+	Enabled     *bool                  `yaml:"enabled,omitempty"`
+	Install     map[string]InstallSpec `yaml:"install,omitempty"`
+	Files       string                 `yaml:"files,omitempty"`
+	Requires    []string               `yaml:"requires,omitempty"`
+	PostInstall []string               `yaml:"post_install,omitempty"`
+	Detected    map[string]string      `yaml:"detected,omitempty"`
+	// Skip lists platform keys (debian, macos, …) where the app is not wanted.
+	Skip []string `yaml:"skip,omitempty"`
+	// Version pins the app permanently, whatever the install mode.
+	Version       string `yaml:"version,omitempty"`
+	MissingOnScan bool   `yaml:"missing_on_scan,omitempty"`
 }
 
 // InstallSpec names exactly one manager field; the rest are modifiers of it.
@@ -112,6 +123,18 @@ func (s InstallSpec) managers() []managerField {
 		{"go", s.GoPkg},
 		{"script", s.Script},
 	}
+}
+
+// Ignored reports whether the app is skipped on this platform or ignored on this machine.
+func (c *Config) Ignored(a App, platformKey, host string) bool {
+	return slices.Contains(a.Skip, platformKey) || slices.Contains(c.Ignore[host], a.ID)
+}
+
+// Hostname identifies this machine for `ignore`.
+func Hostname() string {
+	h, _ := os.Hostname()
+
+	return h
 }
 
 func (c *Config) App(id string) (*App, bool) {

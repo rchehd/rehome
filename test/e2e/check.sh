@@ -39,10 +39,23 @@ check "placeholder reported for manual secret" 'grep -q "fill in secrets by hand
 check "uv tool installed in the same run as uv" '[ -x $home/.local/bin/ruff ]'
 check "node installed via nvm lts alias" 'ls $home/.nvm/versions/node/*/bin/node >/dev/null 2>&1'
 
+cowsay_version() { grep -ho '"version": *"[^"]*"' $home/.nvm/versions/node/*/lib/node_modules/cowsay/package.json | grep -o '[0-9][0-9.]*'; }
+check "locked version installed (cowsay 1.5.0 from rehome.lock)" '[ "$(cowsay_version)" = "1.5.0" ]'
+
 echo "== run 2"
 as_dev "./rehome install --yes --config cfg" > /tmp/run2.log 2>&1
 cat /tmp/run2.log
 check "run 2 only retries the broken apps" 'grep -q "to install: 3," /tmp/run2.log && grep -q "installed: 0," /tmp/run2.log'
+
+check "run 2 keeps the locked version" '[ "$(cowsay_version)" = "1.5.0" ]'
+
+echo "== upgrade"
+sed -i "s/version: 1.5.0/version: 1.6.0/" $home/cfg/rehome.lock
+as_dev "./rehome install --yes --config cfg" > /tmp/run3.log 2>&1
+check "older than lock is only reported" 'grep -q "cowsay: 1.5.0 → 1.6.0" /tmp/run3.log && [ "$(cowsay_version)" = "1.5.0" ]'
+as_dev "./rehome install --yes --upgrade --config cfg" > /tmp/run4.log 2>&1
+check "--upgrade raises it to the lock version" '[ "$(cowsay_version)" = "1.6.0" ]'
+check "an older lock never downgrades" 'sed -i "s/version: 1.6.0/version: 1.5.0/" $home/cfg/rehome.lock && as_dev "./rehome install --yes --versions locked --config cfg" >/dev/null 2>&1; [ "$(cowsay_version)" = "1.6.0" ]'
 
 echo "== scan"
 as_dev "mkdir -p scanned && ./rehome scan --yes --config scanned" > /tmp/scan.log 2>&1
@@ -51,6 +64,7 @@ check "scan finds apt package" 'grep -q "id: htop" $home/scanned/rehome.yml'
 check "scan links gh to its repo" 'grep -q "repo: github-cli" $home/scanned/rehome.yml'
 check "scan finds script install" 'grep -q "id: oh-my-zsh" $home/scanned/rehome.yml'
 check "scan finds uv tool" 'grep -q "uv_tool: ruff" $home/scanned/rehome.yml'
+check "scan records versions in rehome.lock" 'grep -A3 "cowsay:" $home/scanned/rehome.lock | grep -q "version: 1.6.0"'
 check "scanned config is valid" 'as_dev "./rehome debug config --config scanned" | grep -q " 0 errors"'
 
 echo "== $failures failure(s)"

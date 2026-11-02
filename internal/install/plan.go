@@ -9,6 +9,7 @@ import (
 	"github.com/rchehd/rehome/internal/adapter"
 	"github.com/rchehd/rehome/internal/adapter/all"
 	"github.com/rchehd/rehome/internal/config"
+	"github.com/rchehd/rehome/internal/lock"
 	"github.com/rchehd/rehome/internal/platform"
 	"github.com/rchehd/rehome/internal/runner"
 )
@@ -19,6 +20,7 @@ const (
 	StatusInstalled   = "skip-installed"
 	StatusUnavailable = "unavailable"
 	StatusDisabled    = "disabled"
+	StatusIgnored     = "ignored"
 )
 
 type Step struct {
@@ -27,6 +29,11 @@ type Step struct {
 	Adapter adapter.Adapter
 	Status  string
 	Reason  string
+	// Pin is the exact version to install; empty means the latest.
+	Pin lock.Entry
+	// Installed is the version present now; Upgrade the newer one the lock offers.
+	Installed string
+	Upgrade   lock.Entry
 }
 
 type Plan struct {
@@ -34,24 +41,44 @@ type Plan struct {
 	Config   *config.Config
 	Root     string
 	Platform platform.Platform
+	Lock     *lock.Lock
+	Mode     string
 }
 
-// Selection limits the plan to IDs (nil means every enabled app); All reinstalls what is present.
+const (
+	ModeLatest = "latest"
+	ModeLocked = "locked"
+)
+
+// Selection limits the plan to IDs (nil means every enabled app); All reinstalls what is present;
+// Mode picks lock versions or the latest; Latest lists apps that take the latest in locked mode.
 type Selection struct {
-	IDs []string
-	All bool
+	IDs    []string
+	All    bool
+	Mode   string
+	Latest []string
 }
 
 // Build resolves every app to a step in dependency order.
-func Build(ctx context.Context, r *runner.Runner, cfg *config.Config, root string, p platform.Platform, sel Selection) (*Plan, error) {
-	plan := &Plan{Config: cfg, Root: root, Platform: p}
+func Build(ctx context.Context, r *runner.Runner, cfg *config.Config, root string, p platform.Platform, sel Selection, lk *lock.Lock) (*Plan, error) {
+	if lk == nil {
+		lk = lock.New()
+	}
+
+	plan := &Plan{Config: cfg, Root: root, Platform: p, Lock: lk, Mode: sel.Mode}
 
 	for _, app := range cfg.Apps {
 		if sel.IDs != nil && !slices.Contains(sel.IDs, app.ID) {
 			continue
 		}
 
-		plan.Steps = append(plan.Steps, resolve(ctx, r, app, p, sel))
+		step := resolve(ctx, r, app, p, sel)
+
+		if cfg.Ignored(app, p.Key(), config.Hostname()) {
+			step.Status, step.Reason = StatusIgnored, "ignored on this machine or OS"
+		}
+
+		plan.Steps = append(plan.Steps, withVersions(ctx, r, step, lk, p.Key(), sel))
 	}
 
 	steps, err := order(plan.Steps)

@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/rchehd/rehome/internal/config"
+	"github.com/rchehd/rehome/internal/lock"
 	"github.com/rchehd/rehome/internal/platform"
 	"github.com/rchehd/rehome/internal/runner"
 )
@@ -28,6 +29,16 @@ type Adapter interface {
 	Scan(ctx context.Context, r *runner.Runner) ([]Detected, error)
 	Installed(ctx context.Context, r *runner.Runner, s config.InstallSpec) (bool, error)
 	Install(ctx context.Context, r *runner.Runner, s config.InstallSpec) error
+}
+
+// Versioner reports the installed version (or git commit) of a spec; empty when absent.
+type Versioner interface {
+	Version(ctx context.Context, r *runner.Runner, s config.InstallSpec) (lock.Entry, error)
+}
+
+// Pinner installs the exact version (or commit) recorded in the lock.
+type Pinner interface {
+	InstallVersion(ctx context.Context, r *runner.Runner, s config.InstallSpec, e lock.Entry) error
 }
 
 func HasCmd(name string) bool {

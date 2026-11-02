@@ -19,7 +19,7 @@ const (
 	nvmDir     = "~/.nvm"
 	nvmInstall = "curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash"
 	// Prefix makes nvm's node and npm available in non-interactive shells.
-	sourceNvm = `[ -s "$HOME/.nvm/nvm.sh" ] && . "$HOME/.nvm/nvm.sh"; `
+	SourceNvm = `[ -s "$HOME/.nvm/nvm.sh" ] && . "$HOME/.nvm/nvm.sh"; `
 )
 
 var bundled = []string{"npm", "corepack"}
@@ -50,7 +50,7 @@ func (Npm) Scan(ctx context.Context, r *runner.Runner) ([]adapter.Detected, erro
 			adapter.Detected{
 				Manager:  "script",
 				Name:     "node",
-				Spec:     config.InstallSpec{Script: sourceNvm + fmt.Sprintf("nvm install %s && nvm alias default %s", runner.Quote(version), runner.Quote(version)), Bin: bin},
+				Spec:     config.InstallSpec{Script: SourceNvm + fmt.Sprintf("nvm install %s && nvm alias default %s", runner.Quote(version), runner.Quote(version)), Bin: bin},
 				Requires: []string{"nvm"},
 			},
 		)
@@ -91,7 +91,7 @@ var globalRoots = []string{
 }
 
 func (Npm) Install(ctx context.Context, r *runner.Runner, s config.InstallSpec) error {
-	_, err := r.Run(ctx, runner.Cmd{Shell: sourceNvm + "npm install -g -- " + runner.Quote(s.Npm)})
+	_, err := r.Run(ctx, runner.Cmd{Shell: SourceNvm + "npm install -g -- " + runner.Quote(s.Npm)})
 
 	return err
 }

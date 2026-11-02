@@ -7,6 +7,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/rchehd/rehome/internal/install"
+	"github.com/rchehd/rehome/internal/lock"
 )
 
 var statusLabels = map[string]string{
@@ -20,6 +21,9 @@ var statusLabels = map[string]string{
 type item struct {
 	step    install.Step
 	checked bool
+	// latest overrides a lock pin for this app; upgrade raises it to the lock version.
+	latest  bool
+	upgrade bool
 }
 
 type row struct {
@@ -38,12 +42,17 @@ type checklist struct {
 	cancelled bool
 }
 
-// Checklist lets the user pick what to install; missing apps start checked.
-func Checklist(plan *install.Plan) (install.Selection, bool, error) {
+// Checklist lets the user pick what to install; missing apps start checked. It returns the
+// selection and the ids to upgrade to their lock version.
+func Checklist(plan *install.Plan) (install.Selection, []string, bool, error) {
 	m := &checklist{height: 20}
 	seen := map[string]bool{}
 
 	for _, s := range plan.Steps {
+		if s.Status == install.StatusIgnored {
+			continue
+		}
+
 		// Installed apps with settings start checked so new files from the config still arrive.
 		checked := s.Status == install.StatusInstall || s.Status == install.StatusFilesOnly ||
 			(s.Status == install.StatusInstalled && s.App.Files != "")
@@ -59,24 +68,33 @@ func Checklist(plan *install.Plan) (install.Selection, bool, error) {
 	final, err := tea.NewProgram(m).Run()
 
 	if err != nil {
-		return install.Selection{}, false, err
+		return install.Selection{}, nil, false, err
 	}
 
 	m = final.(*checklist)
 
 	if m.cancelled {
-		return install.Selection{}, false, nil
+		return install.Selection{}, nil, false, nil
 	}
 
-	ids := []string{}
+	sel := install.Selection{IDs: []string{}, Mode: plan.Mode}
+	var upgrades []string
 
 	for _, it := range m.items {
 		if it.checked {
-			ids = append(ids, it.step.App.ID)
+			sel.IDs = append(sel.IDs, it.step.App.ID)
+		}
+
+		if it.latest {
+			sel.Latest = append(sel.Latest, it.step.App.ID)
+		}
+
+		if it.upgrade {
+			upgrades = append(upgrades, it.step.App.ID)
 		}
 	}
 
-	return install.Selection{IDs: ids}, true, nil
+	return sel, upgrades, true, nil
 }
 
 func (m *checklist) Init() tea.Cmd { return nil }
@@ -132,6 +150,14 @@ func (m *checklist) updateKey(key string) tea.Cmd {
 		if m.cursor < len(rows) {
 			m.toggleGroup(rows[m.cursor].group)
 		}
+	case "v":
+		if it := m.current(rows); it != nil && it.step.Pin != (lock.Entry{}) {
+			it.latest = !it.latest
+		}
+	case "u":
+		if it := m.current(rows); it != nil && it.step.Upgrade != (lock.Entry{}) {
+			it.upgrade = !it.upgrade
+		}
 	}
 
 	return nil
@@ -154,6 +180,14 @@ func (m *checklist) updateFilter(key string) {
 	}
 
 	m.cursor = 0
+}
+
+func (m *checklist) current(rows []row) *item {
+	if m.cursor < len(rows) {
+		return rows[m.cursor].item
+	}
+
+	return nil
 }
 
 func (m *checklist) toggleGroup(group string) {
@@ -230,7 +264,7 @@ func (m *checklist) View() tea.View {
 		b.WriteString(line + "\n")
 	}
 
-	b.WriteString(helpStyle.Render("↑/↓ move · space toggle · a toggle group · / filter · enter continue · q quit"))
+	b.WriteString(helpStyle.Render("↑/↓ move · space toggle · a group · v lock/latest · u upgrade · / filter · enter continue · q quit"))
 	v := tea.NewView(b.String())
 	v.AltScreen = true
 
@@ -260,7 +294,33 @@ func renderRow(r row) string {
 		detail = detail[:57] + "…"
 	}
 
-	return fmt.Sprintf("  %s %-32s %s %s", box, s.App.ID, statusStyles[label].Render(fmt.Sprintf("%-9s", label)), dimStyle.Render(detail))
+	return fmt.Sprintf("  %s %-32s %s %-14s %s", box, s.App.ID, statusStyles[label].Render(fmt.Sprintf("%-9s", label)), versionLabel(r.item), dimStyle.Render(detail))
+}
+
+// versionLabel shows what will be installed: @pin, latest, or ↑ an available upgrade.
+func versionLabel(it *item) string {
+	s := it.step
+
+	switch {
+	case s.Upgrade != (lock.Entry{}) && it.upgrade:
+		return "↑" + s.Upgrade.Version
+	case s.Upgrade != (lock.Entry{}):
+		return s.Installed + " (↑)"
+	case s.Pin != (lock.Entry{}) && !it.latest:
+		return "@" + pinText(s.Pin)
+	case s.Status == install.StatusInstall:
+		return "latest"
+	}
+
+	return s.Installed
+}
+
+func pinText(e lock.Entry) string {
+	if e.Commit != "" {
+		return e.Commit[:min(8, len(e.Commit))]
+	}
+
+	return e.Version
 }
 
 func toggle(it *item) {

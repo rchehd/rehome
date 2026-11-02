@@ -26,9 +26,14 @@ apps:
     install: { any: { uv_tool: ruff, bin: ruff } }
   - id: nvm
     install: { any: { script: curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash, bin: ~/.nvm/nvm.sh } }
+  - id: libatomic1 # node LTS needs it; minimal images lack it
+    install: { debian: { apt: libatomic1 } }
   - id: node
-    requires: [nvm]
+    requires: [nvm, libatomic1]
     install: { any: { script: '[ -s "$HOME/.nvm/nvm.sh" ] && . "$HOME/.nvm/nvm.sh"; nvm install ''lts/*'' && nvm alias default ''lts/*''', bin: ~/.nvm/versions/node/*/bin/node } }
+  - id: cowsay # pinned to an old version in rehome.lock
+    requires: [node]
+    install: { any: { npm: cowsay } }
   - id: rustup # disabled on purpose: dependents must still install
     enabled: false
     install: { any: { script: "false", bin: ~/.cargo/bin/rustup } }
