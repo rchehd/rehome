@@ -50,7 +50,8 @@ check "rerun installs nothing" 'grep -q "to install: 0," "$work/run2.log"'
 echo "== scan"
 rehome scan --yes --config "$work/scanned" > "$work/scan.log" 2>&1
 check "scan records macOS installers" 'grep -q "brew: htop" "$work/scanned/rehome.yml" && grep -q "cask: rectangle" "$work/scanned/rehome.yml"'
-check "scanned config is valid" 'rehome debug config --config "$work/scanned" | grep -q " 0 errors"'
+rehome debug config --config "$work/scanned" > "$work/debug.log" 2>&1
+check "scanned config is valid" 'grep -q " 0 errors" "$work/debug.log" || { cat "$work/debug.log"; false; }'
 
 echo "== $failures failure(s)"
 [ "$failures" -eq 0 ]
