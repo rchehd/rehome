@@ -78,5 +78,12 @@ check "settings of an app outside the catalog found automatically" 'grep -q "ori
 check "unclaimed config dir reported with an action" 'grep -q "~/.config/mystery: no app claims it" /tmp/scan.log'
 check "scanned config is valid" 'as_dev "./rehome debug config --config scanned" | grep -q " 0 errors"'
 
+echo "== Bitwarden"
+if as_dev "bash /e2e/bitwarden.sh /home/dev/rehome"; then
+  pass "Bitwarden restore, failure handling and rescan"
+else
+  fail "Bitwarden restore, failure handling and rescan"
+fi
+
 echo "== $failures failure(s)"
 [ "$failures" -eq 0 ]

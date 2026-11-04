@@ -61,8 +61,34 @@ capture:
 Anything rehome cannot take by itself — a settings folder too large to copy whole, a `~/.config` folder no app claims,
 an unknown binary — is listed under **needs your attention** with what to do about it.
 
-Secrets are never written: tokens, passwords and keys in settings files are replaced with `<rehome:redacted>`,
-and `rehome push` refuses to push anything that still looks like a secret. Log in again after installing.
+Captured settings replace detected tokens, passwords and keys with `<rehome:redacted>`. Before pushing,
+`rehome push` checks the config for secrets.
+
+### Restore a setting from Bitwarden
+
+In your trusted local config, add a `bitwarden` reference to the file's existing mapping:
+
+```yaml
+files:
+  myapp:
+    - src: files/myapp/settings.env
+      dest: {linux: ~/.config/myapp/settings.env, macos: ~/.config/myapp/settings.env}
+      bitwarden: bw:12345678-1234-1234-1234-123456789abc/api_token
+```
+
+Put one `<rehome:redacted>` marker in the template, for example `API_TOKEN='<rehome:redacted>'`.
+The reference uses the item's UUID and either a custom field name or `login.password`. Inline values support
+letters, digits and `._~+/=@%:-`. Once you add the reference, edit the template in the config repo directly.
+Future scans leave it alone.
+
+With the Bitwarden CLI installed and logged in, run:
+
+```sh
+BW_SESSION="$(bw unlock --raw)" rehome install --bitwarden
+```
+
+The rendered file is written outside the config folder with permissions `0600`. To replace a differing local
+file, add `--overwrite-files`. Without `--bitwarden`, install skips these mappings and reports them.
 
 ## Moving between Linux and macOS
 

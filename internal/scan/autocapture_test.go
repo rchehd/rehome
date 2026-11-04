@@ -7,7 +7,38 @@ import (
 
 	"github.com/rchehd/rehome/internal/catalog"
 	"github.com/rchehd/rehome/internal/config"
+	"github.com/rchehd/rehome/internal/files"
 )
+
+func TestScanKeepsBitwardenTemplateAndIgnoresDestinationAlias(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	dest := filepath.Join(home, "settings")
+	alias := filepath.Join(home, "alias")
+	if err := os.WriteFile(dest, []byte("local value"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := os.Symlink(dest, alias); err != nil {
+		t.Fatal(err)
+	}
+
+	template := "files/app/settings"
+	s := &scanner{res: &Result{}, existing: &config.Config{Files: map[string][]config.FileMap{
+		"app": {{Src: template, Dest: map[string]string{"linux": "~/settings"}, Bitwarden: "bw:12345678-1234-1234-1234-123456789abc/token"}},
+	}}}
+	s.protectSecretFiles()
+	s.addChanges([]files.Change{
+		{Src: dest, Dst: template},
+		{Src: alias, Dst: "files/other/settings"},
+		{Src: filepath.Join(home, "other"), Dst: "files/app/other"},
+	})
+
+	if len(s.res.FileChanges) != 1 || s.res.FileChanges[0].Dst != "files/app/other" {
+		t.Fatalf("unexpected changes: %+v", s.res.FileChanges)
+	}
+}
 
 func TestUnclaimedConfigDirs(t *testing.T) {
 	home := t.TempDir()

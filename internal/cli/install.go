@@ -3,19 +3,23 @@ package cli
 import (
 	"bytes"
 	"errors"
+	"os"
 
 	"github.com/spf13/cobra"
 
 	"github.com/rchehd/rehome/internal/app"
+	"github.com/rchehd/rehome/internal/config"
 	"github.com/rchehd/rehome/internal/files"
 	"github.com/rchehd/rehome/internal/install"
 	"github.com/rchehd/rehome/internal/lock"
+	"github.com/rchehd/rehome/internal/secrets"
 	"github.com/rchehd/rehome/internal/tui"
 )
 
 type installFlags struct {
 	all, missing, yes, overwrite, upgrade, offline bool
 	versions                                       string
+	bitwarden                                      bool
 }
 
 func newInstallCmd() *cobra.Command {
@@ -37,6 +41,27 @@ func newInstallCmd() *cobra.Command {
 				return errors.New("--versions must be latest or locked")
 			}
 
+			options := install.Options{OverwriteFiles: f.overwrite, Upgrade: f.upgrade}
+
+			if f.bitwarden {
+				if config.IsURL(flags.config) {
+					return errors.New("--bitwarden requires a trusted local config")
+				}
+
+				if session, ok := os.LookupEnv("BW_SESSION"); ok {
+					if err := os.Unsetenv("BW_SESSION"); err != nil {
+						return err
+					}
+
+					defer os.Setenv("BW_SESSION", session)
+					options.ResolveSecret = func(ref string) (string, error) {
+						return secrets.BitwardenValue(cmd.Context(), session, ref)
+					}
+				} else if !flags.dryRun {
+					return errors.New("unlock Bitwarden and supply BW_SESSION")
+				}
+			}
+
 			plan, err := buildPlan(cmd, install.Selection{All: f.all, Offline: f.offline}, f)
 
 			if err != nil {
@@ -44,16 +69,16 @@ func newInstallCmd() *cobra.Command {
 			}
 
 			if flags.json {
-				return installJSON(cmd, plan, f)
+				return installJSON(cmd, plan, options)
 			}
 
 			if !f.yes && interactive() {
-				return installInteractive(cmd, plan, f)
+				return installInteractive(cmd, plan, f, options)
 			}
 
 			printPlan(cmd, plan)
 
-			return runPlan(cmd, plan, install.Options{OverwriteFiles: f.overwrite, Upgrade: f.upgrade})
+			return runPlan(cmd, plan, options)
 		},
 	}
 
@@ -65,12 +90,13 @@ func newInstallCmd() *cobra.Command {
 	fl.StringVar(&f.versions, "versions", "", "latest, or locked to install the versions from rehome.lock (default: locked when a lock exists)")
 	fl.BoolVar(&f.upgrade, "upgrade", false, "upgrade installed apps that are older than the lock")
 	fl.BoolVar(&f.offline, "offline", false, "map installers between OSes from local package indexes only (no Homebrew API, no Repology)")
+	fl.BoolVar(&f.bitwarden, "bitwarden", false, "restore settings from an unlocked Bitwarden vault")
 
 	return cmd
 }
 
 // installInteractive: checklist, then a summary with every command, then the run.
-func installInteractive(cmd *cobra.Command, plan *install.Plan, f installFlags) error {
+func installInteractive(cmd *cobra.Command, plan *install.Plan, f installFlags, options install.Options) error {
 	sel, upgrades, ok, err := tui.Checklist(plan)
 
 	if err != nil || !ok {
@@ -102,7 +128,8 @@ func installInteractive(cmd *cobra.Command, plan *install.Plan, f installFlags) 
 		return err
 	}
 
-	report, err := executePlan(cmd, plan, install.Options{OverwriteFiles: f.overwrite, Upgrade: f.upgrade, UpgradeIDs: upgrades})
+	options.UpgradeIDs = upgrades
+	report, err := executePlan(cmd, plan, options)
 
 	if err != nil {
 		return err
@@ -119,6 +146,12 @@ func reviewKeptLocal(cmd *cobra.Command, report *install.Report) {
 	var kept []files.ApplyResult
 
 	for _, res := range report.KeptLocal {
+		if res.Repo == nil && res.Local == nil {
+			kept = append(kept, res)
+
+			continue
+		}
+
 		replace, err := tui.Confirm("Replace your "+res.Dest+" with the config's version? (a .rehome.bak is kept)", files.Unified(res.Local, res.Repo, res.Dest))
 
 		if err == nil && replace {
@@ -254,12 +287,12 @@ func pinLabel(e lock.Entry) string {
 }
 
 // installJSON prints the plan for --dry-run, or runs it (--yes) and prints the report.
-func installJSON(cmd *cobra.Command, plan *install.Plan, f installFlags) error {
+func installJSON(cmd *cobra.Command, plan *install.Plan, options install.Options) error {
 	if flags.dryRun {
 		return report(cmd, app.PlanJSON(plan), "")
 	}
 
-	rep, err := executePlan(cmd, plan, install.Options{OverwriteFiles: f.overwrite, Upgrade: f.upgrade})
+	rep, err := executePlan(cmd, plan, options)
 
 	if err != nil {
 		return err
