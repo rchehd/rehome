@@ -50,7 +50,7 @@ func TestPrivateModeTravelsThroughConfig(t *testing.T) {
 	dest := filepath.Join(home, ".npmrc")
 	maps[0].Dest["linux"] = dest
 
-	if _, err := Apply(root, maps, ApplyOptions{FileKey: "linux"}); err != nil {
+	if _, err := Apply(t.Context(), root, maps, ApplyOptions{FileKey: "linux"}); err != nil {
 		t.Fatal(err)
 	}
 

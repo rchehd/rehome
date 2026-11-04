@@ -270,6 +270,7 @@ func (s *scanner) captureFiles() error {
 	}
 
 	s.captureByRules()
+	s.captureDconf()
 	s.res.Attention = append(s.res.Attention, unclaimedConfigDirs(s.res.Config, s.cat, s.p.FileKey())...)
 
 	if _, ok := s.apps["claude-code"]; ok {
@@ -283,6 +284,32 @@ func (s *scanner) captureFiles() error {
 	}
 
 	return nil
+}
+
+func (s *scanner) captureDconf() {
+	if s.p.OS != "linux" || !files.GNOMEAvailable() {
+		return
+	}
+
+	const id = "gnome-settings"
+	change, found, err := files.CaptureDconf(s.ctx, s.r, s.root)
+
+	if err != nil {
+		s.warn("GNOME settings: %v", err)
+
+		return
+	}
+
+	if !found {
+		return
+	}
+
+	s.apps[id] = &config.App{ID: id, Group: "desktop", Files: id, Skip: []string{"macos"}}
+	s.res.Config.Files[id] = []config.FileMap{{Src: files.DconfSnapshot, Dconf: true}}
+
+	if change != nil {
+		s.addChanges([]files.Change{*change})
+	}
 }
 
 func (s *scanner) addChanges(cs []files.Change) {

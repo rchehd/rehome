@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"path"
 	"regexp"
 	"slices"
 	"strings"
@@ -69,6 +70,10 @@ func (c *Config) Validate() []error {
 
 	for group, files := range c.Files {
 		for _, file := range files {
+			if file.Dconf && (!strings.HasPrefix(path.Clean(file.Src), "files/") || len(file.Dest) > 0 || file.Bitwarden != "" || file.Mode != "") {
+				errs = append(errs, fmt.Errorf("%s: dconf requires a snapshot under files/ and cannot use dest, mode or bitwarden", group))
+			}
+
 			if file.Bitwarden != "" && !secrets.ValidBitwardenRef(file.Bitwarden) {
 				errs = append(errs, fmt.Errorf("%s: %s needs a valid Bitwarden item UUID and selector", group, file.Src))
 			}

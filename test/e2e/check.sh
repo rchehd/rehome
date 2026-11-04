@@ -10,7 +10,7 @@ check() { if eval "$2"; then pass "$1"; else fail "$1"; fi; }
 as_dev() { su - dev -c "$1"; }
 
 export DEBIAN_FRONTEND=noninteractive
-apt-get update -qq >/dev/null && apt-get install -y -qq sudo openssh-client >/dev/null
+apt-get update -qq >/dev/null && apt-get install -y -qq sudo openssh-client dconf-cli dconf-service dbus >/dev/null
 useradd -m -s /bin/bash dev
 echo "dev ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/dev
 cp -r /e2e/fixture /home/dev/cfg && cp /e2e/rehome /home/dev/rehome && chown -R dev /home/dev/cfg /home/dev/rehome
@@ -83,6 +83,13 @@ if as_dev "bash /e2e/bitwarden.sh /home/dev/rehome"; then
   pass "Bitwarden restore, failure handling and rescan"
 else
   fail "Bitwarden restore, failure handling and rescan"
+fi
+
+echo "== GNOME dconf"
+if as_dev "bash /e2e/dconf.sh /home/dev/rehome"; then
+  pass "GNOME settings scan, restore and conflict handling"
+else
+  fail "GNOME settings scan, restore and conflict handling"
 fi
 
 echo "== $failures failure(s)"
