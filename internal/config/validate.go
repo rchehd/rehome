@@ -70,13 +70,46 @@ func (c *Config) Validate() []error {
 	for group, files := range c.Files {
 		for _, file := range files {
 			if file.Bitwarden != "" && !secrets.ValidBitwardenRef(file.Bitwarden) {
-				errs = append(errs, fmt.Errorf("%s: %s needs a Bitwarden reference in the form bw:item-uuid/field", group, file.Src))
+				errs = append(errs, fmt.Errorf("%s: %s needs a valid Bitwarden item UUID and selector", group, file.Src))
+			}
+
+			if secrets.IsBitwardenSSHKey(file.Bitwarden) {
+				errs = append(errs, validateSSHKey(group, file)...)
 			}
 		}
 	}
 
 	if cycle := c.findCycle(); cycle != nil {
 		errs = append(errs, fmt.Errorf("requires cycle: %s", strings.Join(cycle, " -> ")))
+	}
+
+	return errs
+}
+
+var sshKeyPath = regexp.MustCompile(`^~/\.ssh/[A-Za-z0-9][A-Za-z0-9._-]*$`)
+
+func ValidSSHKeyDest(dest string) bool {
+	if !sshKeyPath.MatchString(dest) {
+		return false
+	}
+
+	name := strings.ToLower(strings.TrimPrefix(dest, "~/.ssh/"))
+
+	return !slices.Contains([]string{"config", "known_hosts", "known_hosts.old", "authorized_keys", "authorized_keys2", "rc", "environment"}, name) &&
+		!strings.HasSuffix(name, ".pub") && !strings.Contains(name, ".rehome.bak")
+}
+
+func validateSSHKey(group string, file FileMap) []error {
+	var errs []error
+
+	if file.Src != "" || len(file.Dest) == 0 {
+		errs = append(errs, fmt.Errorf("%s: a Bitwarden SSH key needs destinations and has no src template", group))
+	}
+
+	for key, dest := range file.Dest {
+		if (key != "linux" && key != "macos") || !ValidSSHKeyDest(dest) {
+			errs = append(errs, fmt.Errorf("%s: invalid Bitwarden SSH key destination for %s, expected a key filename directly under ~/.ssh", group, key))
+		}
 	}
 
 	return errs

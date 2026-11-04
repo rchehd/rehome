@@ -305,7 +305,9 @@ func (s *scanner) protectSecretFiles() {
 				continue
 			}
 
-			s.secretTemplates[filepath.Clean(f.Src)] = true
+			if f.Src != "" {
+				s.secretTemplates[filepath.Clean(f.Src)] = true
+			}
 
 			if dest := f.Dest[s.p.FileKey()]; dest != "" {
 				if info, err := os.Stat(adapter.Home(dest)); err == nil {
