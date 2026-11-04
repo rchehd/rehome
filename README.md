@@ -62,7 +62,7 @@ Anything rehome cannot take by itself — a settings folder too large to copy wh
 an unknown binary — is listed under **needs your attention** with what to do about it.
 
 On Linux with GNOME and `dconf-cli`, `scan` also saves a text snapshot of desktop, Shell, Mutter, keyboard
-shortcut and GNOME Terminal preferences. `install` restores those settings when GNOME is available.
+shortcut and GNOME Terminal preferences. `install` restores those settings through `dconf-service` over D-Bus.
 If a saved setting conflicts with a local value, the snapshot is kept unapplied unless you pass
 `--overwrite-files`. That option saves a private backup and preserves settings outside the snapshot.
 
