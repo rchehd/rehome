@@ -195,13 +195,13 @@ func TestApplyCopiesAndDetectsIdentical(t *testing.T) {
 	put(t, filepath.Join(root, "files/out.conf"), "a=1\n")
 	maps := []config.FileMap{{Src: "files/out.conf", Dest: map[string]string{"linux": dest}}}
 
-	res, err := Apply(root, maps, ApplyOptions{FileKey: "linux"})
+	res, err := Apply(t.Context(), root, maps, ApplyOptions{FileKey: "linux"})
 
 	if err != nil || res[0].Status != StatusCopied || read(t, dest) != "a=1\n" {
 		t.Fatalf("copy: %+v, %v", res, err)
 	}
 
-	res, err = Apply(root, maps, ApplyOptions{FileKey: "linux"})
+	res, err = Apply(t.Context(), root, maps, ApplyOptions{FileKey: "linux"})
 
 	if err != nil || res[0].Status != StatusIdentical {
 		t.Errorf("identical: %+v, %v", res, err)
@@ -214,7 +214,7 @@ func TestApplyIdenticalWhenOnlySecretDiffers(t *testing.T) {
 	put(t, dest, "export API_TOKEN=abcdef1234567890\n")
 	maps := []config.FileMap{{Src: "files/env.conf", Dest: map[string]string{"linux": dest}}}
 
-	res, err := Apply(root, maps, ApplyOptions{FileKey: "linux"})
+	res, err := Apply(t.Context(), root, maps, ApplyOptions{FileKey: "linux"})
 
 	if err != nil || res[0].Status != StatusIdentical || res[0].Redacted {
 		t.Fatalf("got %+v, %v", res, err)
@@ -231,7 +231,7 @@ func TestApplyKeepsLocalThenOverwrites(t *testing.T) {
 	put(t, dest, "old\n")
 	maps := []config.FileMap{{Src: "files/out.conf", Dest: map[string]string{"linux": dest}}}
 
-	res, err := Apply(root, maps, ApplyOptions{FileKey: "linux"})
+	res, err := Apply(t.Context(), root, maps, ApplyOptions{FileKey: "linux"})
 
 	if err != nil || res[0].Status != StatusKeptLocal {
 		t.Fatalf("kept: %+v, %v", res, err)
@@ -241,7 +241,7 @@ func TestApplyKeepsLocalThenOverwrites(t *testing.T) {
 		t.Errorf("kept-local result = %+v", res[0])
 	}
 
-	res, err = Apply(root, maps, ApplyOptions{FileKey: "linux", Overwrite: true})
+	res, err = Apply(t.Context(), root, maps, ApplyOptions{FileKey: "linux", Overwrite: true})
 
 	if err != nil || res[0].Status != StatusOverwritten {
 		t.Fatalf("overwrite: %+v, %v", res, err)
@@ -263,7 +263,7 @@ func TestApplyDryRunWritesNothing(t *testing.T) {
 		{Src: "files/b", Dest: map[string]string{"linux": existing}},
 	}
 
-	res, err := Apply(root, maps, ApplyOptions{FileKey: "linux", Overwrite: true, DryRun: true})
+	res, err := Apply(t.Context(), root, maps, ApplyOptions{FileKey: "linux", Overwrite: true, DryRun: true})
 
 	if err != nil || res[0].Status != StatusCopied || res[1].Status != StatusOverwritten {
 		t.Fatalf("got %+v, %v", res, err)
@@ -289,7 +289,7 @@ func TestApplyMissingSourceAndDestination(t *testing.T) {
 		{Src: "files/none", Dest: map[string]string{"macos": "/x"}},
 	}
 
-	res, err := Apply(root, maps, ApplyOptions{FileKey: "linux"})
+	res, err := Apply(t.Context(), root, maps, ApplyOptions{FileKey: "linux"})
 
 	if err != nil {
 		t.Fatal(err)
@@ -305,7 +305,7 @@ func TestApplyFlagsRedactedCopy(t *testing.T) {
 	put(t, filepath.Join(root, "files/env"), "export API_TOKEN="+secrets.Placeholder+"\n")
 	maps := []config.FileMap{{Src: "files/env", Dest: map[string]string{"linux": dest}}}
 
-	res, err := Apply(root, maps, ApplyOptions{FileKey: "linux"})
+	res, err := Apply(t.Context(), root, maps, ApplyOptions{FileKey: "linux"})
 
 	if err != nil || res[0].Status != StatusCopied || !res[0].Redacted {
 		t.Errorf("got %+v, %v", res, err)
@@ -318,7 +318,7 @@ func TestApplyExpandsHome(t *testing.T) {
 	put(t, filepath.Join(root, "files/rc"), "x\n")
 	maps := []config.FileMap{{Src: "files/rc", Dest: map[string]string{"linux": "~/.rc"}}}
 
-	if _, err := Apply(root, maps, ApplyOptions{FileKey: "linux"}); err != nil {
+	if _, err := Apply(t.Context(), root, maps, ApplyOptions{FileKey: "linux"}); err != nil {
 		t.Fatal(err)
 	}
 

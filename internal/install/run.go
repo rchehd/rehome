@@ -355,11 +355,12 @@ func (x *executor) applyFiles(s Step) bool {
 	}
 
 	x.progress(Event{ID: s.App.ID, Phase: "settings"})
-	results, err := files.Apply(x.plan.Root, x.plan.Config.Files[s.App.Files], files.ApplyOptions{
+	results, err := files.Apply(x.ctx, x.plan.Root, x.plan.Config.Files[s.App.Files], files.ApplyOptions{
 		FileKey:       x.plan.Platform.FileKey(),
 		Overwrite:     x.opts.OverwriteFiles,
 		DryRun:        x.r.DryRun,
 		ResolveSecret: x.opts.ResolveSecret,
+		Runner:        x.r,
 	})
 
 	if err != nil {
@@ -372,14 +373,18 @@ func (x *executor) applyFiles(s Step) bool {
 		changed = changed || res.Status == files.StatusCopied || res.Status == files.StatusOverwritten
 
 		switch res.Status {
-		case files.StatusSecretSkip:
+		case files.StatusSecretSkip, files.StatusDconfSkip:
 			x.note("%s: %s", res.Dest, res.Problem)
-		case files.StatusSecretError:
+		case files.StatusSecretError, files.StatusDconfError:
 			x.report.Failed = append(x.report.Failed, Outcome{ID: s.App.ID, Reason: res.Dest + ": " + res.Problem})
 		}
 
 		if res.Status == files.StatusKeptLocal {
 			x.report.KeptLocal = append(x.report.KeptLocal, res)
+		}
+
+		if res.Backup != "" {
+			x.note("previous GNOME settings saved to %s", res.Backup)
 		}
 
 		if res.Redacted {

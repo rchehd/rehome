@@ -61,6 +61,11 @@ capture:
 Anything rehome cannot take by itself — a settings folder too large to copy whole, a `~/.config` folder no app claims,
 an unknown binary — is listed under **needs your attention** with what to do about it.
 
+On Linux with GNOME and `dconf-cli`, `scan` also saves a text snapshot of desktop, Shell, Mutter, keyboard
+shortcut and GNOME Terminal preferences. `install` restores those settings when GNOME is available.
+If a saved setting conflicts with a local value, the snapshot is kept unapplied unless you pass
+`--overwrite-files`. That option saves a private backup and preserves settings outside the snapshot.
+
 Captured settings replace detected tokens, passwords and keys with `<rehome:redacted>`. Before pushing,
 `rehome push` checks the config for secrets.
 

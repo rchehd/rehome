@@ -21,6 +21,7 @@ type Cmd struct {
 	// Shell, when set, is run through `bash -c` instead of Name/Args.
 	Shell string
 	Env   []string
+	Stdin io.Reader
 }
 
 type Result struct {
@@ -67,6 +68,7 @@ func (r *Runner) exec(ctx context.Context, c Cmd) (Result, error) {
 
 	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
 	cmd.Env = append(append(os.Environ(), "PATH="+SearchPath()), c.Env...)
+	cmd.Stdin = c.Stdin
 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout

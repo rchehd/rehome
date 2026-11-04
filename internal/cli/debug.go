@@ -50,7 +50,7 @@ func newDebugCmd() *cobra.Command {
 		Args:  cobra.ExactArgs(3),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			maps := []config.FileMap{{Src: args[1], Dest: map[string]string{"linux": args[2]}}}
-			res, err := files.Apply(args[0], maps, files.ApplyOptions{FileKey: "linux", Overwrite: overwrite, DryRun: flags.dryRun})
+			res, err := files.Apply(cmd.Context(), args[0], maps, files.ApplyOptions{FileKey: "linux", Overwrite: overwrite, DryRun: flags.dryRun})
 
 			for _, r := range res {
 				cmd.Printf("%s → %s: %s redacted=%v\n", r.Src, r.Dest, r.Status, r.Redacted)

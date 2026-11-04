@@ -2,6 +2,7 @@ package files
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/rchehd/rehome/internal/adapter"
 	"github.com/rchehd/rehome/internal/config"
+	"github.com/rchehd/rehome/internal/runner"
 	"github.com/rchehd/rehome/internal/secrets"
 )
 
@@ -22,6 +24,8 @@ const (
 	StatusNoDest      = "no-destination"
 	StatusSecretSkip  = "secret-skipped"
 	StatusSecretError = "secret-error"
+	StatusDconfSkip   = "dconf-skipped"
+	StatusDconfError  = "dconf-error"
 	BackupSuffix      = ".rehome.bak"
 )
 
@@ -32,6 +36,7 @@ type ApplyResult struct {
 	// Redacted means the written file still holds placeholders to fill in by hand.
 	Redacted bool   `json:"redacted,omitempty"`
 	Problem  string `json:"problem,omitempty"`
+	Backup   string `json:"backup,omitempty"`
 	// Local and Repo are set for kept-local files so a caller can show the diff.
 	Local []byte `json:"-"`
 	Repo  []byte `json:"-"`
@@ -42,13 +47,21 @@ type ApplyOptions struct {
 	Overwrite     bool
 	DryRun        bool
 	ResolveSecret func(string) (string, error)
+	Runner        *runner.Runner
 }
 
 // Apply copies settings from files/ to the system without silently replacing local edits.
-func Apply(root string, maps []config.FileMap, opts ApplyOptions) ([]ApplyResult, error) {
+func Apply(ctx context.Context, root string, maps []config.FileMap, opts ApplyOptions) ([]ApplyResult, error) {
 	var results []ApplyResult
 
 	for _, m := range maps {
+		if m.Dconf {
+			res := applyDconf(ctx, root, m.Src, opts)
+			results = append(results, res)
+
+			continue
+		}
+
 		res, err := applyOne(root, m, opts)
 
 		if err != nil {
