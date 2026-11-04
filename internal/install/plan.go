@@ -110,6 +110,12 @@ func resolveStep(ctx context.Context, r *runner.Runner, app config.App, p platfo
 
 	spec, ok := app.Spec(p.Key())
 
+	if reason := res.Catalog.WSLReason(p, app, spec); reason != "" {
+		step.Status, step.Reason = StatusUnavailable, reason
+
+		return step
+	}
+
 	if !ok && len(app.Install) == 0 {
 		step.Status, step.Reason = StatusUnavailable, "no install method"
 
@@ -132,6 +138,12 @@ func resolveStep(ctx context.Context, r *runner.Runner, app config.App, p platfo
 		}
 
 		spec, step.Mapped = mapped, source
+
+		if reason := res.Catalog.WSLReason(p, app, spec); reason != "" {
+			step.Status, step.Reason = StatusUnavailable, reason
+
+			return step
+		}
 	}
 
 	a, err := all.ByManager(spec)

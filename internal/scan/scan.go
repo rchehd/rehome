@@ -30,6 +30,7 @@ type Result struct {
 	Findings    []secrets.Finding
 	Unknown     []string
 	Warnings    []string
+	SkipMissing map[string]bool
 	// Attention lists what scan could not take by itself, each with an action for the user.
 	Attention []discover.Warning
 }
@@ -54,6 +55,18 @@ type scanner struct {
 func Run(ctx context.Context, r *runner.Runner, p platform.Platform, cat *catalog.Catalog, root string, existing *config.Config) (*Result, error) {
 	s := &scanner{ctx: ctx, r: r, p: p, cat: cat, root: root, apps: map[string]*config.App{}, res: &Result{}, hints: map[string][]string{}, existing: existing}
 	s.protectSecretFiles()
+
+	if p.WSL {
+		s.res.SkipMissing = map[string]bool{}
+
+		for _, app := range existing.Apps {
+			spec, _ := app.Spec(p.Key())
+
+			if cat.WSLReason(p, app, spec) != "" {
+				s.res.SkipMissing[app.ID] = true
+			}
+		}
+	}
 
 	for _, a := range all.For(p) {
 		found, err := a.Scan(ctx, r)
@@ -136,6 +149,12 @@ func (s *scanner) add(d adapter.Detected) {
 		disabled := false
 		app.ID, app.Group, app.Enabled, app.Detected = "unknown-"+appID(d), config.UnknownGroup, &disabled, d.Meta
 		s.res.Unknown = append(s.res.Unknown, app.ID)
+	}
+
+	spec, _ := app.Spec(s.p.Key())
+
+	if s.res.SkipMissing[app.ID] || s.cat.WSLReason(s.p, *app, spec) != "" {
+		return
 	}
 
 	if prev, dup := s.apps[app.ID]; dup {
@@ -287,7 +306,7 @@ func (s *scanner) captureFiles() error {
 }
 
 func (s *scanner) captureDconf() {
-	if s.p.OS != "linux" || !files.GNOMEAvailable() {
+	if s.p.OS != "linux" || s.p.WSL || !files.GNOMEAvailable() {
 		return
 	}
 

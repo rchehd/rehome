@@ -24,7 +24,7 @@ func Versions(ctx context.Context, r *runner.Runner, cfg *config.Config, found m
 		spec, ok := app.Spec(p.Key())
 
 		if !ok {
-			if len(app.Install) > 0 {
+			if !p.WSL && len(app.Install) > 0 {
 				entries[app.ID] = lock.Entry{Unsupported: true}
 			}
 

@@ -74,6 +74,12 @@ func applyDconf(ctx context.Context, root, src string, opts ApplyOptions) ApplyR
 		return res
 	}
 
+	if opts.WSL {
+		res.Status, res.Problem = StatusDconfSkip, "GNOME desktop settings are unavailable in WSL"
+
+		return res
+	}
+
 	if !GNOMEAvailable() {
 		res.Status, res.Problem = StatusDconfSkip, "GNOME is not installed on this machine"
 

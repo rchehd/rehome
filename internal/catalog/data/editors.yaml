@@ -1,5 +1,6 @@
 - id: sublime-text
   group: editors
+  desktop: true
   install:
     debian: { snap: sublime-text, classic: true }
     macos: { cask: sublime-text }
@@ -16,6 +17,7 @@
 
 - id: jetbrains-toolbox
   group: editors
+  desktop: true
   install:
     debian:
       script: >-
@@ -35,6 +37,7 @@
 
 - id: zed
   group: editors
+  desktop: true
   install:
     debian: { script: curl -fsSL https://zed.dev/install.sh | sh, bin: zed }
     macos: { cask: zed }
@@ -44,6 +47,7 @@
 
 - id: cursor
   group: editors
+  desktop: true
   install:
     debian: { apt: cursor, repo: cursor }
     macos: { cask: cursor }

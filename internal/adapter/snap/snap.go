@@ -24,7 +24,7 @@ func (Snap) Name() string { return "snap" }
 
 // Available does not require the binary: snapd may be installed earlier in the same run.
 func (Snap) Available(p platform.Platform) bool {
-	return p.OS == "linux"
+	return p.OS == "linux" && (!p.WSL || p.Systemd)
 }
 
 func (Snap) Scan(ctx context.Context, r *runner.Runner) ([]adapter.Detected, error) {

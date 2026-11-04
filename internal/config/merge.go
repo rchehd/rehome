@@ -24,7 +24,7 @@ func (r MergeReport) Changed() bool {
 }
 
 // Merge folds a scan into the config without touching user edits; see mergeApps for the rules.
-func Merge(existing []byte, scanned *Config, platformKey string) ([]byte, MergeReport, error) {
+func Merge(existing []byte, scanned *Config, platformKey string, skipMissing map[string]bool) ([]byte, MergeReport, error) {
 	var report MergeReport
 
 	if len(bytes.TrimSpace(existing)) == 0 {
@@ -48,7 +48,7 @@ func Merge(existing []byte, scanned *Config, platformKey string) ([]byte, MergeR
 	}
 
 	root := doc.Content[0]
-	changed, err := mergeApps(root, scanned, platformKey, &report)
+	changed, err := mergeApps(root, scanned, platformKey, skipMissing, &report)
 
 	if err != nil {
 		return nil, report, err
@@ -104,7 +104,7 @@ func Marshal(cfg *Config) ([]byte, error) {
 	return encode(&yaml.Node{Kind: yaml.DocumentNode, Content: []*yaml.Node{&n}})
 }
 
-func mergeApps(root *yaml.Node, scanned *Config, platformKey string, report *MergeReport) (bool, error) {
+func mergeApps(root *yaml.Node, scanned *Config, platformKey string, skipMissing map[string]bool, report *MergeReport) (bool, error) {
 	seq := child(root, "apps")
 
 	if seq == nil {
@@ -159,7 +159,7 @@ func mergeApps(root *yaml.Node, scanned *Config, platformKey string, report *Mer
 	}
 
 	for _, a := range existing.Apps {
-		if found[a.ID] || a.MissingOnScan || !belongsTo(a, platformKey) || existing.Ignored(a, platformKey, Hostname()) {
+		if found[a.ID] || a.MissingOnScan || skipMissing[a.ID] || !belongsTo(a, platformKey) || existing.Ignored(a, platformKey, Hostname()) {
 			continue
 		}
 

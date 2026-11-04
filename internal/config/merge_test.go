@@ -31,7 +31,7 @@ func ids(cfg *Config) []string {
 func merge(t *testing.T, existing string, scanned *Config, key string) (*Config, []byte, MergeReport) {
 	t.Helper()
 
-	out, report, err := Merge([]byte(existing), scanned, key)
+	out, report, err := Merge([]byte(existing), scanned, key, nil)
 
 	if err != nil {
 		t.Fatal(err)
@@ -238,7 +238,7 @@ apt_repos:
 }
 
 func TestMergeRejectsNonMappingRoot(t *testing.T) {
-	if _, _, err := Merge([]byte("- a\n- b\n"), apps(), "debian"); err == nil {
+	if _, _, err := Merge([]byte("- a\n- b\n"), apps(), "debian", nil); err == nil {
 		t.Error("expected error")
 	}
 }

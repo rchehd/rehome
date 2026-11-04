@@ -77,7 +77,7 @@ func PrepareScan(ctx context.Context, o Options) (*ScanPlan, error) {
 		return nil, err
 	}
 
-	merged, report, err := config.Merge(existing, res.Config, p.Key())
+	merged, report, err := config.Merge(existing, res.Config, p.Key(), res.SkipMissing)
 
 	if err != nil {
 		return nil, err

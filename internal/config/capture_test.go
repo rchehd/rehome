@@ -11,7 +11,7 @@ func TestMergeAddsAutoCaptureButKeepsUserRule(t *testing.T) {
 		"fish": {"linux": {Base: "~/.config/fish", Include: []string{"**"}, Origin: OriginAuto}},
 		"mc":   {"linux": {Base: "~/.config/mc", Include: []string{"**"}, Origin: OriginAuto}},
 	}}
-	out, _, err := Merge([]byte(existing), scanned, "debian")
+	out, _, err := Merge([]byte(existing), scanned, "debian", nil)
 
 	if err != nil {
 		t.Fatal(err)
