@@ -1,3 +1,10 @@
+- id: ssh
+  group: shell
+  detect: { paths: [~/.ssh/config, ~/.ssh/known_hosts] }
+  files:
+    linux: &sshfiles { base: ~/.ssh, include: [config, known_hosts] }
+    macos: *sshfiles
+
 - id: zsh
   group: shell
   install:

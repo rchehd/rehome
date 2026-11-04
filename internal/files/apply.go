@@ -176,7 +176,14 @@ func write(dest string, data []byte, want os.FileMode, dryRun bool) error {
 		return nil
 	}
 
-	if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
+	dir := filepath.Dir(dest)
+	dirMode := os.FileMode(0o755)
+
+	if dir == adapter.Home("~/.ssh") {
+		dirMode = 0o700
+	}
+
+	if err := os.MkdirAll(dir, dirMode); err != nil {
 		return err
 	}
 

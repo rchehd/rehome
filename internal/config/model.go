@@ -86,7 +86,7 @@ func (r AptRepo) AllKeyrings() []string {
 }
 
 type FileMap struct {
-	Src       string            `yaml:"src"`
+	Src       string            `yaml:"src,omitempty"`
 	Dest      map[string]string `yaml:"dest"`
 	Bitwarden string            `yaml:"bitwarden,omitempty"`
 	// Mode keeps private permissions (e.g. "0600"), which git does not carry.

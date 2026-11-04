@@ -3,6 +3,7 @@ package secrets
 import (
 	"context"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"os/exec"
 	"regexp"
@@ -11,13 +12,19 @@ import (
 	"github.com/rchehd/rehome/internal/runner"
 )
 
+const sshKeySelector = "sshKey/privateKey"
+
 var (
-	bitwardenRef = regexp.MustCompile(`^bw:([[:xdigit:]]{8}-[[:xdigit:]]{4}-[[:xdigit:]]{4}-[[:xdigit:]]{4}-[[:xdigit:]]{12})/([A-Za-z0-9_.-]+)$`)
+	bitwardenRef = regexp.MustCompile(`^bw:([[:xdigit:]]{8}-[[:xdigit:]]{4}-[[:xdigit:]]{4}-[[:xdigit:]]{4}-[[:xdigit:]]{12})/([A-Za-z0-9_.-]+|sshKey/privateKey)$`)
 	inlineValue  = regexp.MustCompile(`^[A-Za-z0-9._~+/=@%:-]+$`)
 )
 
 func ValidBitwardenRef(ref string) bool {
 	return bitwardenRef.MatchString(ref)
+}
+
+func IsBitwardenSSHKey(ref string) bool {
+	return strings.HasSuffix(ref, "/"+sshKeySelector)
 }
 
 func BitwardenValue(ctx context.Context, session, ref string) (string, error) {
@@ -47,8 +54,10 @@ func BitwardenValue(ctx context.Context, session, ref string) (string, error) {
 
 	var item struct {
 		ID     string
+		Type   int
 		Login  struct{ Password string }
 		Fields []struct{ Name, Value string }
+		SSHKey struct{ PrivateKey string }
 	}
 
 	if err := json.Unmarshal(data, &item); err != nil {
@@ -60,6 +69,15 @@ func BitwardenValue(ctx context.Context, session, ref string) (string, error) {
 	}
 
 	field := parts[2]
+
+	if field == sshKeySelector {
+		if item.Type != 5 {
+			return "", errors.New("Bitwarden item is not an SSH key")
+		}
+
+		return sshPrivateKey(item.SSHKey.PrivateKey)
+	}
+
 	value := item.Login.Password
 
 	if field != "login.password" {
@@ -83,4 +101,19 @@ func BitwardenValue(ctx context.Context, session, ref string) (string, error) {
 	}
 
 	return value, nil
+}
+
+func sshPrivateKey(value string) (string, error) {
+	value = strings.TrimSpace(strings.ReplaceAll(value, "\r\n", "\n"))
+	block, rest := pem.Decode([]byte(value))
+
+	if block != nil && len(block.Bytes) > 0 && len(rest) == 0 &&
+		strings.HasPrefix(value, "-----BEGIN "+block.Type+"-----\n") && strings.Count(value, "-----BEGIN ") == 1 {
+		switch block.Type {
+		case "OPENSSH PRIVATE KEY", "RSA PRIVATE KEY", "EC PRIVATE KEY", "DSA PRIVATE KEY", "PRIVATE KEY", "ENCRYPTED PRIVATE KEY":
+			return value + "\n", nil
+		}
+	}
+
+	return "", errors.New("Bitwarden SSH item does not contain a supported private key")
 }

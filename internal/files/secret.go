@@ -23,24 +23,20 @@ func applySecret(root string, m config.FileMap, opts ApplyOptions, res *ApplyRes
 		return nil
 	}
 
-	configDir, err := os.OpenRoot(root)
+	sshKey := secrets.IsBitwardenSSHKey(m.Bitwarden)
+	var template []byte
 
-	if err != nil {
-		return err
-	}
+	if sshKey {
+		if m.Src != "" || !config.ValidSSHKeyDest(res.Dest) {
+			return errors.New("Bitwarden SSH keys need a destination directly under ~/.ssh and no src template")
+		}
+	} else {
+		var err error
+		template, err = readSecretTemplate(root, m.Src)
 
-	defer configDir.Close()
-
-	template, err := configDir.ReadFile(m.Src)
-
-	if err != nil {
-		return err
-	}
-
-	placeholder := []byte(secrets.Placeholder)
-
-	if secrets.IsBinary(template) || bytes.Count(template, placeholder) != 1 {
-		return errors.New("Bitwarden template must be text with exactly one <rehome:redacted> placeholder")
+		if err != nil {
+			return err
+		}
 	}
 
 	dest := adapter.Home(res.Dest)
@@ -54,6 +50,12 @@ func applySecret(root string, m config.FileMap, opts ApplyOptions, res *ApplyRes
 
 	if err != nil {
 		return err
+	}
+
+	if sshKey {
+		if err := checkSSHDir(parent); err != nil {
+			return err
+		}
 	}
 
 	dest = filepath.Join(parent, filepath.Base(dest))
@@ -80,7 +82,11 @@ func applySecret(root string, m config.FileMap, opts ApplyOptions, res *ApplyRes
 		return err
 	}
 
-	rendered := bytes.Replace(template, placeholder, []byte(value), 1)
+	rendered := []byte(value)
+
+	if !sshKey {
+		rendered = bytes.Replace(template, []byte(secrets.Placeholder), rendered, 1)
+	}
 
 	if !exists {
 		res.Status = StatusCopied
@@ -125,6 +131,62 @@ func applySecret(root string, m config.FileMap, opts ApplyOptions, res *ApplyRes
 	res.Status = StatusOverwritten
 
 	return writeSecret(dest, rendered, true)
+}
+
+func readSecretTemplate(root, src string) ([]byte, error) {
+	dir, err := os.OpenRoot(root)
+
+	if err != nil {
+		return nil, err
+	}
+
+	defer dir.Close()
+
+	template, err := dir.ReadFile(src)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if secrets.IsBinary(template) || bytes.Count(template, []byte(secrets.Placeholder)) != 1 {
+		return nil, errors.New("Bitwarden template must be text with exactly one <rehome:redacted> placeholder")
+	}
+
+	return template, nil
+}
+
+func checkSSHDir(parent string) error {
+	home, err := os.UserHomeDir()
+
+	if err != nil {
+		return err
+	}
+
+	home, err = resolveParent(home)
+
+	if err != nil {
+		return err
+	}
+
+	if parent != filepath.Join(home, ".ssh") {
+		return errors.New("Bitwarden SSH keys require a real ~/.ssh directory")
+	}
+
+	info, err := os.Lstat(parent)
+
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+
+	if err != nil {
+		return err
+	}
+
+	if !info.IsDir() || info.Mode().Perm()&0o022 != 0 {
+		return errors.New("~/.ssh must be a directory without group or other write permissions")
+	}
+
+	return nil
 }
 
 func resolveParent(path string) (string, error) {

@@ -90,6 +90,24 @@ BW_SESSION="$(bw unlock --raw)" rehome install --bitwarden
 The rendered file is written outside the config folder with permissions `0600`. To replace a differing local
 file, add `--overwrite-files`. Without `--bitwarden`, install skips these mappings and reports them.
 
+### Restore an SSH key from Bitwarden
+
+Use the UUID of a Bitwarden SSH Key item. The key mapping stores only a reference and a filename:
+
+```yaml
+apps:
+  - id: ssh
+    files: ssh
+files:
+  ssh:
+    - dest: {linux: ~/.ssh/id_work, macos: ~/.ssh/id_work}
+      bitwarden: bw:12345678-1234-1234-1234-123456789abc/sshKey/privateKey
+```
+
+Run the same `rehome install --bitwarden` command. It writes the private key with mode `0600` and creates
+`~/.ssh` with mode `0700` if needed. An existing key stays in place unless you pass `--overwrite-files`,
+which keeps a private backup. The SSH catalog captures `~/.ssh/config` and `known_hosts` as regular settings.
+
 ## Moving between Linux and macOS
 
 A config made on Ubuntu installs on a Mac (and the other way round) without you looking up package names. When an
