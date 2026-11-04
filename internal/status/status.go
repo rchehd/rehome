@@ -8,6 +8,7 @@ import (
 
 	"github.com/rchehd/rehome/internal/catalog"
 	"github.com/rchehd/rehome/internal/config"
+	"github.com/rchehd/rehome/internal/gitsync"
 	"github.com/rchehd/rehome/internal/install"
 	"github.com/rchehd/rehome/internal/lock"
 	"github.com/rchehd/rehome/internal/platform"
@@ -16,6 +17,7 @@ import (
 )
 
 type Status struct {
+	Source gitsync.SourceStatus `json:"source_status,omitempty"`
 	// Missing are enabled config apps not installed here.
 	Missing []string `json:"missing"`
 	// New are apps installed here but absent from the config.
@@ -31,7 +33,8 @@ type Status struct {
 }
 
 func (s *Status) Clean() bool {
-	return len(s.Missing)+len(s.New)+len(s.ChangedFiles)+len(s.Behind)+len(s.NotSynced) == 0
+	return (s.Source == "" || s.Source == gitsync.SourceCurrent) &&
+		len(s.Missing)+len(s.New)+len(s.ChangedFiles)+len(s.Behind)+len(s.NotSynced) == 0
 }
 
 // Compute compares the config with the system in both directions without writing anything.
@@ -84,6 +87,19 @@ func Compute(ctx context.Context, r *runner.Runner, cfg *config.Config, existing
 }
 
 func (s *Status) Print(w io.Writer) {
+	switch s.Source {
+	case gitsync.SourceCurrent:
+		fmt.Fprintln(w, "config source: up to date")
+	case gitsync.SourceAhead:
+		fmt.Fprintln(w, "config source: local commits to publish (rehome push)")
+	case gitsync.SourceDirty:
+		fmt.Fprintln(w, "config source: local config changes to publish (rehome push)")
+	case gitsync.SourceChanged:
+		fmt.Fprintln(w, "config source: updates available (rehome sync)")
+	case gitsync.SourceUnknown:
+		fmt.Fprintln(w, "config source: could not check the linked Git branch")
+	}
+
 	if len(s.Unsupported) > 0 {
 		fmt.Fprintf(w, "not available on this OS (%d): %s\n", len(s.Unsupported), strings.Join(s.Unsupported, ", "))
 	}

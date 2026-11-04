@@ -20,10 +20,11 @@ Once releases are published: `curl -fsSL https://raw.githubusercontent.com/rcheh
 ## Usage
 
 ```bash
-rehome                      # interactive menu: Scan / Install / Status / Pull / Push
+rehome                      # interactive menu: Scan / Install / Sync / Status / Pull / Push
 rehome scan                 # detect software and settings, create or update the config
 rehome install              # checklist of what is missing, then install it
-rehome status               # compare the config with this system (exit 1 when they differ)
+rehome sync                 # pull the linked config and apply it with the install workflow
+rehome status               # check the linked source and local system (exit 1 if out of sync)
 rehome link <git-url>       # keep the config in your own private repo
 rehome push / rehome pull   # sync it between machines
 ```
@@ -37,6 +38,29 @@ present, `--overwrite-files` to replace differing settings (a `.rehome.bak` is k
 - a folder with `rehome.yml` and `files/`: `--config ~/backup/rehome-config` (USB stick, archive, anything);
 - a single file: `--config ./rehome.yml` (settings come from `files/` next to it);
 - a URL: `--config https://…/rehome.yml` (app list only; you are warned it is not your repo).
+
+### Share a config across three machines
+
+Any machine can update the config after you install a new tool. The other machines can then apply the update.
+
+```mermaid
+flowchart TB
+    source["Config source (repo, file)"] <--> desktop["Desktop PC"]
+    source <--> laptop["Laptop"]
+    source <--> third["Third machine"]
+```
+
+- **With Git**, run `rehome link <git-url>` once on each machine. On whichever machine made the change,
+  run `rehome pull`, `rehome scan`, then `rehome push`. On any receiving machine, run `rehome status`
+  to check for updates and `rehome sync` to pull and apply them. For an empty repo, start with `scan` and `push`.
+- **With a file or folder**, start from the latest copy, run `rehome scan --config ./rehome-config` on the
+  machine with changes, then share the updated `rehome.yml`. Include the adjacent `files/` to transfer settings
+  and `rehome.lock` to transfer pinned versions. On a receiving machine, run
+  `rehome sync --config ./rehome-config/rehome.yml` to apply that copy. You can also pass the folder.
+
+If scan lists the tool as an unknown binary, add an install method and enable it before sharing the config.
+`rehome status` reports the linked Git branch and local system separately. With `--config`, it compares
+the supplied config with the local system.
 
 ## What it picks up
 

@@ -2,9 +2,6 @@ package app
 
 import (
 	"context"
-	"errors"
-	"os"
-	"path/filepath"
 
 	"github.com/rchehd/rehome/internal/catalog"
 	"github.com/rchehd/rehome/internal/config"
@@ -20,12 +17,7 @@ func Status(ctx context.Context, o Options) (*status.Status, error) {
 		return nil, err
 	}
 
-	existing, err := os.ReadFile(filepath.Join(root, config.FileName))
-
-	// A config from a URL has no file next to it; compare against the loaded one.
-	if errors.Is(err, os.ErrNotExist) {
-		existing, err = config.Marshal(cfg)
-	}
+	existing, err := config.Marshal(cfg)
 
 	if err != nil {
 		return nil, err
