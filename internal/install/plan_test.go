@@ -5,7 +5,57 @@ import (
 	"testing"
 
 	"github.com/rchehd/rehome/internal/config"
+	"github.com/rchehd/rehome/internal/platform"
+	"github.com/rchehd/rehome/internal/runner"
 )
+
+func TestWSLPlan(t *testing.T) {
+	cfg := &config.Config{Apps: []config.App{
+		{ID: "fonts", Files: "fonts"},
+		{ID: "fira-code", Install: map[string]config.InstallSpec{"debian": {Apt: "fonts-firacode"}}},
+		{ID: "gnome-settings", Files: "gnome-settings"},
+		{ID: "code", Install: map[string]config.InstallSpec{"debian": {Apt: "code"}}},
+		{ID: "editor", Group: "desktop", Install: map[string]config.InstallSpec{"any": {Script: "true"}}},
+		{ID: "snap-tool", Install: map[string]config.InstallSpec{"debian": {Snap: "snap-tool"}}},
+		{ID: "flatpak-tool", Install: map[string]config.InstallSpec{"debian": {Flatpak: "org.example.Tool"}}},
+		{ID: "flatpak", Install: map[string]config.InstallSpec{"debian": {Apt: "flatpak:amd64"}}},
+		{ID: "terminal-tool", Install: map[string]config.InstallSpec{"any": {Script: "true"}}},
+	}}
+
+	for _, systemd := range []bool{false, true} {
+		p := platform.Platform{OS: "linux", ID: "ubuntu", WSL: true, Systemd: systemd}
+		plan, err := Build(t.Context(), &runner.Runner{}, cfg, "", p, Selection{All: true, Offline: true}, nil)
+
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		for _, s := range plan.Steps {
+			switch s.App.ID {
+			case "fonts", "fira-code", "code", "editor":
+				if s.Status != StatusUnavailable || s.Reason != "install this on Windows" {
+					t.Errorf("%s: %s (%s)", s.App.ID, s.Status, s.Reason)
+				}
+			case "gnome-settings":
+				if s.Status != StatusUnavailable {
+					t.Errorf("GNOME settings must be unavailable in WSL: %s", s.Status)
+				}
+			case "terminal-tool":
+				if s.Status != StatusInstall {
+					t.Errorf("terminal tool should remain installable: %s", s.Status)
+				}
+			case "snap-tool", "flatpak-tool":
+				if (s.Status == StatusInstall) != systemd {
+					t.Errorf("%s with systemd=%t: %s (%s)", s.App.ID, systemd, s.Status, s.Reason)
+				}
+			case "flatpak":
+				if !systemd && s.Reason != "Snap and Flatpak are unavailable in WSL without systemd" {
+					t.Errorf("Flatpak backend should be blocked: %s (%s)", s.Status, s.Reason)
+				}
+			}
+		}
+	}
+}
 
 func step(id string, spec config.InstallSpec, requires ...string) Step {
 	return Step{App: config.App{ID: id, Requires: requires}, Spec: spec}

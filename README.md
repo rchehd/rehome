@@ -6,7 +6,7 @@ Move your whole workstation to a new machine.
 generates a portable config. On a fresh machine, feed it the same config and it installs everything from scratch
 or fills in whatever is missing, picking the right package manager for the detected OS.
 
-> Supports Ubuntu, Debian and macOS. No release yet — build from source.
+> Supports Ubuntu, Debian, macOS and Ubuntu/Debian on WSL. No release yet — build from source.
 
 ## Install
 
@@ -112,6 +112,13 @@ files:
 Run the same `rehome install --bitwarden` command. It writes the private key with mode `0600` and creates
 `~/.ssh` with mode `0700` if needed. An existing key stays in place unless you pass `--overwrite-files`,
 which keeps a private backup. The SSH catalog captures `~/.ssh/config` and `known_hosts` as regular settings.
+
+## Using rehome on WSL
+
+WSL uses the same config as Ubuntu and Debian. rehome restores terminal tools and their settings and points
+you to Windows for catalogued graphical apps and fonts. For your own graphical apps, set `group: desktop`.
+GNOME desktop settings are skipped on WSL. Snap and Flatpak are available to the installer only when systemd
+is running. Scanning WSL does not mark intentionally skipped apps as missing in the shared config.
 
 ## Moving between Linux and macOS
 

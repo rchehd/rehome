@@ -357,6 +357,7 @@ func (x *executor) applyFiles(s Step) bool {
 	x.progress(Event{ID: s.App.ID, Phase: "settings"})
 	results, err := files.Apply(x.ctx, x.plan.Root, x.plan.Config.Files[s.App.Files], files.ApplyOptions{
 		FileKey:       x.plan.Platform.FileKey(),
+		WSL:           x.plan.Platform.WSL,
 		Overwrite:     x.opts.OverwriteFiles,
 		DryRun:        x.r.DryRun,
 		ResolveSecret: x.opts.ResolveSecret,

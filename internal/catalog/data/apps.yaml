@@ -14,6 +14,7 @@
 
 - id: bitwarden
   group: security
+  desktop: true
   install:
     debian: { snap: bitwarden }
     macos: { cask: bitwarden }

@@ -235,7 +235,7 @@ func newDebugCmd() *cobra.Command {
 					return err
 				}
 
-				out, rep, err := config.Merge(existing, scanned, "debian")
+				out, rep, err := config.Merge(existing, scanned, "debian", nil)
 
 				if err != nil {
 					return err

@@ -6,7 +6,7 @@ root="$(cd "$(dirname "$0")/../.." && pwd)"
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 
-cp -r "$root/test/e2e/fixture" "$root/test/e2e/check.sh" "$root/test/e2e/bitwarden.sh" "$root/test/e2e/dconf.sh" "$work/"
+cp -r "$root/test/e2e/fixture" "$root/test/e2e/check.sh" "$root/test/e2e/bitwarden.sh" "$root/test/e2e/dconf.sh" "$root/test/e2e/wsl.sh" "$work/"
 (cd "$root" && CGO_ENABLED=0 go build -o "$work/rehome" ./cmd/rehome)
 # apt reads the local fixture repo as the _apt user.
 chmod -R a+rX "$work"

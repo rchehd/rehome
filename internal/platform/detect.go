@@ -18,6 +18,8 @@ type Platform struct {
 	Version  string
 	Codename string
 	Arch     string
+	WSL      bool
+	Systemd  bool
 }
 
 // Detect identifies the running OS, distribution and architecture.
@@ -44,6 +46,14 @@ func Detect() (Platform, error) {
 	p.IDLike = strings.Fields(fields["ID_LIKE"])
 	p.Version = fields["VERSION_ID"]
 	p.Codename = fields["VERSION_CODENAME"]
+
+	kernel, _ := os.ReadFile("/proc/version")
+	p.WSL = isWSL(string(kernel)) || os.Getenv("WSL_DISTRO_NAME") != "" || os.Getenv("WSL_INTEROP") != ""
+
+	if p.WSL {
+		init, _ := os.ReadFile("/proc/1/comm")
+		p.Systemd = strings.TrimSpace(string(init)) == "systemd"
+	}
 
 	if p.Key() == "" {
 		return p, fmt.Errorf("unsupported platform: %s", p.ID)
@@ -86,7 +96,17 @@ func (p Platform) FileKey() string {
 }
 
 func (p Platform) String() string {
-	return strings.TrimSpace(fmt.Sprintf("%s %s %s %s %s", p.Key(), p.ID, p.Version, p.Codename, p.Arch))
+	name := strings.TrimSpace(fmt.Sprintf("%s %s %s %s %s", p.Key(), p.ID, p.Version, p.Codename, p.Arch))
+
+	if p.WSL {
+		name += " (WSL)"
+	}
+
+	return name
+}
+
+func isWSL(kernel string) bool {
+	return strings.Contains(strings.ToLower(kernel), "microsoft")
 }
 
 func readOSRelease(path string) (map[string]string, error) {

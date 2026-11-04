@@ -44,6 +44,7 @@ type ApplyResult struct {
 
 type ApplyOptions struct {
 	FileKey       string
+	WSL           bool
 	Overwrite     bool
 	DryRun        bool
 	ResolveSecret func(string) (string, error)

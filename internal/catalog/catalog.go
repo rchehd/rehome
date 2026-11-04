@@ -6,11 +6,13 @@ import (
 	"io/fs"
 	"path/filepath"
 	"regexp"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 
 	"github.com/rchehd/rehome/internal/adapter"
 	"github.com/rchehd/rehome/internal/config"
+	"github.com/rchehd/rehome/internal/platform"
 )
 
 //go:embed data/*.yaml
@@ -19,6 +21,7 @@ var data embed.FS
 type Entry struct {
 	ID       string                        `yaml:"id"`
 	Group    string                        `yaml:"group"`
+	Desktop  bool                          `yaml:"desktop"`
 	Install  map[string]config.InstallSpec `yaml:"install"`
 	Detect   Detect                        `yaml:"detect"`
 	Files    map[string]FileRule           `yaml:"files"`
@@ -91,6 +94,47 @@ func (c *Catalog) Get(id string) (*Entry, bool) {
 	}
 
 	return nil, false
+}
+
+func (c *Catalog) WSLReason(p platform.Platform, app config.App, spec config.InstallSpec) string {
+	if !p.WSL {
+		return ""
+	}
+
+	if app.ID == "gnome-settings" {
+		return "GNOME desktop settings are unavailable in WSL"
+	}
+
+	desktop := desktopGroup(app.Group)
+
+	if c != nil {
+		entry, found := c.Get(app.ID)
+
+		if !found {
+			_, pkg := spec.Manager()
+			entry, found = c.Match(adapter.Detected{Name: pkg})
+		}
+
+		if found {
+			desktop = desktop || entry.Desktop || desktopGroup(entry.Group)
+		}
+	}
+
+	apt, _, _ := strings.Cut(spec.Apt, ":")
+
+	if desktop || strings.HasPrefix(apt, "fonts-") || strings.HasPrefix(apt, "ttf-") {
+		return "install this on Windows"
+	}
+
+	if !p.Systemd && (spec.Snap != "" || spec.Flatpak != "" || apt == "snapd" || apt == "flatpak") {
+		return "Snap and Flatpak are unavailable in WSL without systemd"
+	}
+
+	return ""
+}
+
+func desktopGroup(group string) bool {
+	return group == "desktop" || group == "browsers" || group == "messengers"
 }
 
 // Match finds the entry describing detected software.

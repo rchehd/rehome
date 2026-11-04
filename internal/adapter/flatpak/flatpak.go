@@ -16,7 +16,7 @@ func (Flatpak) Name() string { return "flatpak" }
 
 // Available does not require the binary: an apt step earlier in the same run may install it.
 func (Flatpak) Available(p platform.Platform) bool {
-	return p.OS == "linux"
+	return p.OS == "linux" && (!p.WSL || p.Systemd)
 }
 
 func (Flatpak) Scan(ctx context.Context, r *runner.Runner) ([]adapter.Detected, error) {

@@ -92,5 +92,12 @@ else
   fail "GNOME settings scan, restore and conflict handling"
 fi
 
+echo "== WSL"
+if as_dev "bash /e2e/wsl.sh /home/dev/rehome"; then
+  pass "WSL plan, install and scan policy"
+else
+  fail "WSL plan, install and scan policy"
+fi
+
 echo "== $failures failure(s)"
 [ "$failures" -eq 0 ]

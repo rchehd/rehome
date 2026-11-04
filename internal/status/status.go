@@ -48,7 +48,7 @@ func Compute(ctx context.Context, r *runner.Runner, cfg *config.Config, existing
 		switch {
 		case s.Status == install.StatusInstall:
 			st.Missing = append(st.Missing, s.App.ID)
-		case s.Status == install.StatusUnavailable && len(s.App.Install) > 0:
+		case s.Status == install.StatusUnavailable && (len(s.App.Install) > 0 || p.WSL && s.App.Files != ""):
 			st.Unsupported = append(st.Unsupported, s.App.ID)
 		case s.Upgrade != (lock.Entry{}):
 			st.Behind = append(st.Behind, fmt.Sprintf("%s %s → %s", s.App.ID, s.Installed, s.Upgrade.Version))
@@ -61,7 +61,7 @@ func Compute(ctx context.Context, r *runner.Runner, cfg *config.Config, existing
 		return nil, err
 	}
 
-	_, report, err := config.Merge(existing, res.Config, p.Key())
+	_, report, err := config.Merge(existing, res.Config, p.Key(), res.SkipMissing)
 
 	if err != nil {
 		return nil, err

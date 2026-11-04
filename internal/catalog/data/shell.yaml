@@ -34,6 +34,7 @@
 
 - id: fonts
   group: shell
+  desktop: true
   detect: { path: ~/.local/share/fonts/*, paths: [~/Library/Fonts/*] }
   files:
     linux: { base: ~/.local/share/fonts, include: ["**"], exclude: ["**/.uuid"], max_size_mb: 20 }
@@ -53,6 +54,7 @@
 
 - id: kitty
   group: terminals
+  desktop: true
   install:
     debian: { apt: kitty }
     macos: { cask: kitty }
@@ -62,6 +64,7 @@
 
 - id: terminator
   group: terminals
+  desktop: true
   skip: [macos]
   install:
     debian: { apt: terminator }
@@ -71,6 +74,7 @@
 
 - id: ghostty
   group: terminals
+  desktop: true
   install:
     debian: { snap: ghostty, classic: true }
     macos: { cask: ghostty }

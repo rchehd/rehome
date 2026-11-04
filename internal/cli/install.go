@@ -214,6 +214,10 @@ func printPlan(cmd *cobra.Command, plan *install.Plan) {
 		c[install.StatusInstall], c[install.StatusFilesOnly], c[install.StatusInstalled], c[install.StatusUnavailable], c[install.StatusDisabled], c[install.StatusIgnored])
 
 	for _, s := range plan.Steps {
+		if plan.Platform.WSL && s.Status == install.StatusUnavailable {
+			cmd.Printf("  - %-28s %s\n", s.App.ID, s.Reason)
+		}
+
 		if s.Status == install.StatusInstall {
 			name, pkg := s.Spec.Manager()
 			version := ""

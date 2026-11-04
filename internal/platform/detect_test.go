@@ -44,6 +44,7 @@ func TestPlatformKeys(t *testing.T) {
 		isDebian bool
 	}{
 		{"ubuntu", Platform{OS: "linux", ID: "ubuntu", IDLike: []string{"debian"}}, "debian", "linux", true},
+		{"ubuntu-wsl", Platform{OS: "linux", ID: "ubuntu", IDLike: []string{"debian"}, WSL: true}, "debian", "linux", true},
 		{"debian", Platform{OS: "linux", ID: "debian"}, "debian", "linux", true},
 		{"fedora", Platform{OS: "linux", ID: "fedora", IDLike: []string{"rhel"}}, "", "linux", false},
 		{"darwin", Platform{OS: "darwin", ID: "macos"}, "macos", "macos", false},
@@ -63,6 +64,18 @@ func TestPlatformKeys(t *testing.T) {
 				t.Errorf("Is(debian) = %v", got)
 			}
 		})
+	}
+}
+
+func TestWSLKernelDetection(t *testing.T) {
+	for _, kernel := range []string{"Linux version 4.4.0-19041-Microsoft", "Linux version 6.6.87.2-microsoft-standard-WSL2"} {
+		if !isWSL(kernel) {
+			t.Errorf("WSL kernel not detected: %s", kernel)
+		}
+	}
+
+	if isWSL("Linux version 6.8.0-90-generic (buildd@lcy02)") {
+		t.Error("native Linux detected as WSL")
 	}
 }
 

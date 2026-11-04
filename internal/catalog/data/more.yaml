@@ -60,6 +60,7 @@
 
 - id: alacritty
   group: terminals
+  desktop: true
   install:
     debian: { apt: alacritty }
     macos: { cask: alacritty }
@@ -70,6 +71,7 @@
 
 - id: wezterm
   group: terminals
+  desktop: true
   install:
     macos: { cask: wezterm }
   detect: { bins: [wezterm], packages: [wezterm] }
@@ -79,6 +81,7 @@
 
 - id: vscode
   group: editors
+  desktop: true
   install:
     macos: { cask: visual-studio-code }
   detect: { packages: [code, visual-studio-code], bins: [code] }

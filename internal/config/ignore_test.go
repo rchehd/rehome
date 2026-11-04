@@ -26,7 +26,7 @@ func TestValidateSkipPlatform(t *testing.T) {
 
 func TestMergeDoesNotFlagIgnoredApps(t *testing.T) {
 	existing := "version: 1\napps:\n  - id: steam\n    skip: [debian]\n    install:\n      debian: {apt: steam}\n"
-	out, report, err := Merge([]byte(existing), &Config{Version: 1}, "debian")
+	out, report, err := Merge([]byte(existing), &Config{Version: 1}, "debian", nil)
 
 	if err != nil {
 		t.Fatal(err)
