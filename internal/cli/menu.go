@@ -12,13 +12,14 @@ import (
 var menuItems = []tui.MenuItem{
 	{Key: "scan", Title: "Scan", Help: "detect software and settings, update the config"},
 	{Key: "install", Title: "Install", Help: "pick and install what is missing"},
-	{Key: "status", Title: "Status", Help: "compare the config with this system"},
+	{Key: "sync", Title: "Sync", Help: "pull and apply the config"},
+	{Key: "status", Title: "Status", Help: "check the config source and this system"},
 	{Key: "pull", Title: "Pull", Help: "fetch the config from your repo"},
 	{Key: "push", Title: "Push", Help: "commit and push the config to your repo"},
 }
 
 var menuCommands = map[string]func() *cobra.Command{
-	"scan": newScanCmd, "install": newInstallCmd, "status": newStatusCmd, "pull": newPullCmd, "push": newPushCmd,
+	"scan": newScanCmd, "install": newInstallCmd, "sync": newSyncCmd, "status": newStatusCmd, "pull": newPullCmd, "push": newPushCmd,
 }
 
 // runMenu loops over the main menu until the user quits.

@@ -57,7 +57,7 @@ func newRoot() *cobra.Command {
 	pf.BoolVar(&flags.dryRun, "dry-run", false, "print what would be done without changing anything")
 	pf.BoolVarP(&flags.verbose, "verbose", "v", false, "print every command")
 
-	root.AddCommand(newVersionCmd(), newScanCmd(), newInstallCmd(), newStatusCmd(), newConfigCmd(), newMCPCmd(), newLinkCmd(), newPushCmd(), newPullCmd(), newDebugCmd())
+	root.AddCommand(newVersionCmd(), newScanCmd(), newInstallCmd(), newSyncCmd(), newStatusCmd(), newConfigCmd(), newMCPCmd(), newLinkCmd(), newPushCmd(), newPullCmd(), newDebugCmd())
 
 	return root
 }

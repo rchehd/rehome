@@ -3,6 +3,7 @@ package gitsync
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"strings"
@@ -11,6 +12,7 @@ import (
 // Git runs the system git with the terminal attached so credential prompts work.
 type Git struct {
 	DryRun bool
+	Stdout io.Writer
 }
 
 func (g Git) Clone(ctx context.Context, url, path string) error {
@@ -68,6 +70,10 @@ func (g Git) run(ctx context.Context, dir string, args ...string) error {
 
 	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
+
+	if g.Stdout != nil {
+		cmd.Stdout = g.Stdout
+	}
 
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("git %s: %w", args[len(args)-1], err)
