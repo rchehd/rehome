@@ -10,6 +10,7 @@ import (
 	"github.com/rchehd/rehome/internal/app"
 	"github.com/rchehd/rehome/internal/config"
 	"github.com/rchehd/rehome/internal/files"
+	"github.com/rchehd/rehome/internal/gitsync"
 	"github.com/rchehd/rehome/internal/install"
 	"github.com/rchehd/rehome/internal/lock"
 	"github.com/rchehd/rehome/internal/secrets"
@@ -23,11 +24,19 @@ type installFlags struct {
 }
 
 func newInstallCmd() *cobra.Command {
+	return newApplyCmd("install", "Install everything in the config, or only what is missing", false)
+}
+
+func newSyncCmd() *cobra.Command {
+	return newApplyCmd("sync", "Pull the linked config and apply it to this machine", true)
+}
+
+func newApplyCmd(name, description string, sync bool) *cobra.Command {
 	var f installFlags
 
 	cmd := &cobra.Command{
-		Use:   "install",
-		Short: "Install everything in the config, or only what is missing",
+		Use:   name,
+		Short: description,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if f.all && f.missing {
 				return errors.New("--all and --missing are mutually exclusive")
@@ -59,6 +68,26 @@ func newInstallCmd() *cobra.Command {
 					}
 				} else if !flags.dryRun {
 					return errors.New("unlock Bitwarden and supply BW_SESSION")
+				}
+			}
+
+			if sync && flags.config == "" {
+				s, err := config.LoadSettings()
+
+				if err != nil {
+					return err
+				}
+
+				if s.Linked() {
+					if flags.dryRun {
+						cmd.PrintErrln("dry run: the install preview uses the current local config")
+					}
+
+					git := gitsync.Git{DryRun: flags.dryRun, Stdout: cmd.ErrOrStderr()}
+
+					if err := git.Pull(cmd.Context(), s.ClonePath); err != nil {
+						return err
+					}
 				}
 			}
 
@@ -135,7 +164,9 @@ func installInteractive(cmd *cobra.Command, plan *install.Plan, f installFlags, 
 		return err
 	}
 
-	reviewKeptLocal(cmd, report)
+	if !flags.dryRun {
+		reviewKeptLocal(cmd, report)
+	}
 	report.Print(cmd.OutOrStdout())
 
 	return exitCode(report)
