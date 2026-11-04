@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"maps"
+	"os"
+	"path/filepath"
 	"slices"
 	"sort"
 	"strings"
@@ -43,16 +45,15 @@ type scanner struct {
 	// hints are extra names (package, binaries) used to find an app's settings.
 	hints map[string][]string
 	// existing is the config already in root; its capture rules are honoured.
-	existing *config.Config
+	existing           *config.Config
+	secretTemplates    map[string]bool
+	secretDestinations []os.FileInfo
 }
 
 // Run detects installed software and settings; nothing is written.
-func Run(ctx context.Context, r *runner.Runner, p platform.Platform, cat *catalog.Catalog, root string) (*Result, error) {
-	s := &scanner{ctx: ctx, r: r, p: p, cat: cat, root: root, apps: map[string]*config.App{}, res: &Result{}, hints: map[string][]string{}, existing: &config.Config{}}
-
-	if cfg, _, err := config.Load(root); err == nil {
-		s.existing = cfg
-	}
+func Run(ctx context.Context, r *runner.Runner, p platform.Platform, cat *catalog.Catalog, root string, existing *config.Config) (*Result, error) {
+	s := &scanner{ctx: ctx, r: r, p: p, cat: cat, root: root, apps: map[string]*config.App{}, res: &Result{}, hints: map[string][]string{}, existing: existing}
+	s.protectSecretFiles()
 
 	for _, a := range all.For(p) {
 		found, err := a.Scan(ctx, r)
@@ -223,7 +224,7 @@ func (s *scanner) captureRepos() error {
 		}
 
 		if c != nil {
-			s.res.FileChanges = append(s.res.FileChanges, *c)
+			s.addChanges([]files.Change{*c})
 		}
 	}
 
@@ -286,9 +287,45 @@ func (s *scanner) captureFiles() error {
 
 func (s *scanner) addChanges(cs []files.Change) {
 	for _, c := range cs {
+		if s.secretTemplates[filepath.Clean(c.Dst)] || s.isSecretDestination(c.Src) {
+			continue
+		}
+
 		s.res.FileChanges = append(s.res.FileChanges, c)
 		s.res.Findings = append(s.res.Findings, c.Findings...)
 	}
+}
+
+func (s *scanner) protectSecretFiles() {
+	s.secretTemplates = map[string]bool{}
+
+	for _, group := range s.existing.Files {
+		for _, f := range group {
+			if f.Bitwarden == "" {
+				continue
+			}
+
+			s.secretTemplates[filepath.Clean(f.Src)] = true
+
+			if dest := f.Dest[s.p.FileKey()]; dest != "" {
+				if info, err := os.Stat(adapter.Home(dest)); err == nil {
+					s.secretDestinations = append(s.secretDestinations, info)
+				}
+			}
+		}
+	}
+}
+
+func (s *scanner) isSecretDestination(path string) bool {
+	if len(s.secretDestinations) == 0 {
+		return false
+	}
+
+	info, err := os.Stat(adapter.Home(path))
+
+	return err == nil && slices.ContainsFunc(s.secretDestinations, func(dest os.FileInfo) bool {
+		return os.SameFile(info, dest)
+	})
 }
 
 func (s *scanner) sortedApps() []config.App {

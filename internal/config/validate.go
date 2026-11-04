@@ -5,6 +5,8 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+
+	"github.com/rchehd/rehome/internal/secrets"
 )
 
 var platformKeys = []string{"debian", "macos", "fedora", "arch"}
@@ -61,6 +63,14 @@ func (c *Config) Validate() []error {
 
 			if rule.Base == "" || len(rule.Include) == 0 {
 				errs = append(errs, fmt.Errorf("capture %s.%s: base and include are required", id, key))
+			}
+		}
+	}
+
+	for group, files := range c.Files {
+		for _, file := range files {
+			if file.Bitwarden != "" && !secrets.ValidBitwardenRef(file.Bitwarden) {
+				errs = append(errs, fmt.Errorf("%s: %s needs a Bitwarden reference in the form bw:item-uuid/field", group, file.Src))
 			}
 		}
 	}

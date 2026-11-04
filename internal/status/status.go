@@ -55,7 +55,7 @@ func Compute(ctx context.Context, r *runner.Runner, cfg *config.Config, existing
 		}
 	}
 
-	res, err := scan.Run(ctx, r, p, cat, root)
+	res, err := scan.Run(ctx, r, p, cat, root, cfg)
 
 	if err != nil {
 		return nil, err

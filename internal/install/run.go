@@ -18,6 +18,7 @@ var prerequisites = []string{"git", "curl", "ca-certificates", "gnupg"}
 
 type Options struct {
 	OverwriteFiles bool
+	ResolveSecret  func(string) (string, error)
 	// Upgrade raises every installed app older than the lock; UpgradeIDs only those listed.
 	Upgrade    bool
 	UpgradeIDs []string
@@ -355,9 +356,10 @@ func (x *executor) applyFiles(s Step) bool {
 
 	x.progress(Event{ID: s.App.ID, Phase: "settings"})
 	results, err := files.Apply(x.plan.Root, x.plan.Config.Files[s.App.Files], files.ApplyOptions{
-		FileKey:   x.plan.Platform.FileKey(),
-		Overwrite: x.opts.OverwriteFiles,
-		DryRun:    x.r.DryRun,
+		FileKey:       x.plan.Platform.FileKey(),
+		Overwrite:     x.opts.OverwriteFiles,
+		DryRun:        x.r.DryRun,
+		ResolveSecret: x.opts.ResolveSecret,
 	})
 
 	if err != nil {
@@ -368,6 +370,13 @@ func (x *executor) applyFiles(s Step) bool {
 
 	for _, res := range results {
 		changed = changed || res.Status == files.StatusCopied || res.Status == files.StatusOverwritten
+
+		switch res.Status {
+		case files.StatusSecretSkip:
+			x.note("%s: %s", res.Dest, res.Problem)
+		case files.StatusSecretError:
+			x.report.Failed = append(x.report.Failed, Outcome{ID: s.App.ID, Reason: res.Dest + ": " + res.Problem})
+		}
 
 		if res.Status == files.StatusKeptLocal {
 			x.report.KeptLocal = append(x.report.KeptLocal, res)

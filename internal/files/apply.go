@@ -20,6 +20,8 @@ const (
 	StatusOverwritten = "overwritten"
 	StatusNoSource    = "missing-source"
 	StatusNoDest      = "no-destination"
+	StatusSecretSkip  = "secret-skipped"
+	StatusSecretError = "secret-error"
 	BackupSuffix      = ".rehome.bak"
 )
 
@@ -28,16 +30,18 @@ type ApplyResult struct {
 	Dest   string `json:"dest"`
 	Status string `json:"status"`
 	// Redacted means the written file still holds placeholders to fill in by hand.
-	Redacted bool `json:"redacted,omitempty"`
+	Redacted bool   `json:"redacted,omitempty"`
+	Problem  string `json:"problem,omitempty"`
 	// Local and Repo are set for kept-local files so a caller can show the diff.
 	Local []byte `json:"-"`
 	Repo  []byte `json:"-"`
 }
 
 type ApplyOptions struct {
-	FileKey   string
-	Overwrite bool
-	DryRun    bool
+	FileKey       string
+	Overwrite     bool
+	DryRun        bool
+	ResolveSecret func(string) (string, error)
 }
 
 // Apply copies settings from files/ to the system without silently replacing local edits.
@@ -48,7 +52,11 @@ func Apply(root string, maps []config.FileMap, opts ApplyOptions) ([]ApplyResult
 		res, err := applyOne(root, m, opts)
 
 		if err != nil {
-			return results, err
+			if m.Bitwarden == "" {
+				return results, err
+			}
+
+			res.Status, res.Problem = StatusSecretError, err.Error()
 		}
 
 		results = append(results, res)
@@ -64,6 +72,12 @@ func applyOne(root string, m config.FileMap, opts ApplyOptions) (ApplyResult, er
 		res.Status = StatusNoDest
 
 		return res, nil
+	}
+
+	if m.Bitwarden != "" {
+		err := applySecret(root, m, opts, &res)
+
+		return res, err
 	}
 
 	repo, err := os.ReadFile(filepath.Join(root, m.Src))

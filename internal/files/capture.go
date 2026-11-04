@@ -184,6 +184,12 @@ type walker struct {
 }
 
 func (w *walker) add(rel string) {
+	name := filepath.Base(rel)
+
+	if strings.Contains(name, BackupSuffix) || strings.HasPrefix(name, ".rehome-secret-") {
+		return
+	}
+
 	if w.rule.Matches(rel) && !w.seen[rel] {
 		w.seen[rel] = true
 		w.rels = append(w.rels, rel)

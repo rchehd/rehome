@@ -60,8 +60,18 @@ func PrepareScan(ctx context.Context, o Options) (*ScanPlan, error) {
 		return nil, err
 	}
 
+	cfg := &config.Config{}
+
+	if len(existing) > 0 {
+		cfg, err = config.Parse(existing)
+
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	o.logf("scanning %s …", p)
-	res, err := scan.Run(ctx, o.Runner, p, cat, root)
+	res, err := scan.Run(ctx, o.Runner, p, cat, root, cfg)
 
 	if err != nil {
 		return nil, err
