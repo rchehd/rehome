@@ -17,7 +17,7 @@ func newScanCmd() *cobra.Command {
 		Use:   "scan",
 		Short: "Detect installed software and settings and update the config",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			plan, err := app.PrepareScan(cmd.Context(), opts(cmd))
+			plan, err := withSpinner(cmd, opts(cmd), app.PrepareScan)
 
 			if err != nil {
 				return err

@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"os"
 
@@ -217,7 +218,9 @@ func buildPlan(cmd *cobra.Command, sel install.Selection, f installFlags) (*inst
 		return nil, err
 	}
 
-	return app.BuildPlan(cmd.Context(), o, in, sel)
+	return withSpinner(cmd, o, func(ctx context.Context, o app.Options) (*install.Plan, error) {
+		return app.BuildPlan(ctx, o, in, sel)
+	})
 }
 
 // installMode: the flag wins; with a lock the user picks (locked under --yes); no lock means latest.

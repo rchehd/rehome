@@ -20,6 +20,7 @@ import (
 	"github.com/rchehd/rehome/internal/discover"
 	"github.com/rchehd/rehome/internal/files"
 	"github.com/rchehd/rehome/internal/platform"
+	"github.com/rchehd/rehome/internal/progress"
 	"github.com/rchehd/rehome/internal/runner"
 	"github.com/rchehd/rehome/internal/secrets"
 	"github.com/rchehd/rehome/internal/sessions"
@@ -80,6 +81,7 @@ func Run(ctx context.Context, r *runner.Runner, p platform.Platform, cat *catalo
 	}
 
 	for _, a := range all.For(p) {
+		progress.Step(ctx, "scanning %s", a.Name())
 		found, err := a.Scan(ctx, r)
 
 		if err != nil {
@@ -121,6 +123,7 @@ func Run(ctx context.Context, r *runner.Runner, p platform.Platform, cat *catalo
 		}
 	}
 
+	progress.Step(ctx, "looking for installed tools")
 	bins, err := binaries.Resolve(ctx, r, cat, known)
 
 	if err != nil {
@@ -136,6 +139,8 @@ func Run(ctx context.Context, r *runner.Runner, p platform.Platform, cat *catalo
 	}
 
 	s.dropUnknownRepos()
+
+	progress.Step(ctx, "reading settings")
 
 	if err := s.captureFiles(); err != nil {
 		return nil, err
@@ -302,6 +307,7 @@ func (s *scanner) captureFiles() error {
 			continue
 		}
 
+		progress.Step(s.ctx, "reading settings: %s", id)
 		entry, _ := s.cat.Get(app.Files)
 		if entry.SessionFormat != "" {
 			changes, mappings, warnings := files.CaptureSessions(s.ctx, entry, s.p.FileKey(), s.root, s.options.SessionPaths)
@@ -334,12 +340,16 @@ func (s *scanner) captureFiles() error {
 		s.addChanges(changes)
 	}
 
+	progress.Step(s.ctx, "reading settings: custom rules")
 	s.captureByRules()
+	progress.Step(s.ctx, "reading settings: GNOME")
 	s.captureDconf()
+	progress.Step(s.ctx, "looking for other settings")
 	s.res.Attention = append(s.res.Attention, discover.DesktopSessions()...)
 	s.res.Attention = append(s.res.Attention, unclaimedConfigDirs(s.res.Config, s.cat, s.p.FileKey())...)
 
 	if _, ok := s.apps["claude-code"]; ok {
+		progress.Step(s.ctx, "reading settings: Claude MCP and plugins")
 		changes, err := ai.CaptureClaude(s.root)
 
 		if err != nil {

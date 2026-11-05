@@ -12,6 +12,7 @@ import (
 	"github.com/rchehd/rehome/internal/install"
 	"github.com/rchehd/rehome/internal/lock"
 	"github.com/rchehd/rehome/internal/platform"
+	"github.com/rchehd/rehome/internal/progress"
 	"github.com/rchehd/rehome/internal/runner"
 	"github.com/rchehd/rehome/internal/scan"
 )
@@ -48,6 +49,7 @@ func (s *Status) Clean() bool {
 
 // Compute compares the config with the system in both directions without writing anything.
 func Compute(ctx context.Context, r *runner.Runner, cfg *config.Config, existing []byte, root string, p platform.Platform, cat *catalog.Catalog, repo, local *lock.Lock, options scan.Options) (*Status, error) {
+	progress.Step(ctx, "checking installed apps")
 	plan, err := install.Build(ctx, r, cfg, root, p, install.Selection{Offline: true}, repo)
 
 	if err != nil {
@@ -86,6 +88,7 @@ func Compute(ctx context.Context, r *runner.Runner, cfg *config.Config, existing
 		found[a.ID] = true
 	}
 
+	progress.Step(ctx, "checking versions")
 	current := scan.Versions(ctx, r, cfg, found, p)
 	st.compareVersions(plan.Steps, current, repo, local, p.Key())
 

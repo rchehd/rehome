@@ -12,6 +12,7 @@ import (
 	"github.com/rchehd/rehome/internal/config"
 	"github.com/rchehd/rehome/internal/discover"
 	"github.com/rchehd/rehome/internal/files"
+	"github.com/rchehd/rehome/internal/progress"
 )
 
 // captureByRules takes settings of apps the catalog does not cover: the config's own or
@@ -27,6 +28,7 @@ func (s *scanner) captureByRules() {
 			continue
 		}
 
+		progress.Step(s.ctx, "reading settings: %s", id)
 		rules, ok := s.existing.Capture[id]
 
 		if !ok {
