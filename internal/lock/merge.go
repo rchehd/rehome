@@ -45,21 +45,3 @@ func orderable(a, b Entry) bool {
 		a.Commit == "" && b.Commit == "" && !a.Unsupported && !b.Unsupported
 }
 
-// Snapshot is the local lock after a sync: exactly what is installed here now.
-func Snapshot(local *Lock, current map[string]Entry, platform string) *Lock {
-	next := local.Clone()
-
-	for id, byPlatform := range next.Apps {
-		delete(byPlatform, platform)
-
-		if len(byPlatform) == 0 {
-			delete(next.Apps, id)
-		}
-	}
-
-	for id, e := range current {
-		next.Set(id, platform, e)
-	}
-
-	return next
-}

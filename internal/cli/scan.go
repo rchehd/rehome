@@ -91,7 +91,7 @@ func printScanSummary(cmd *cobra.Command, sp *app.ScanPlan) {
 	}
 
 	cmd.Printf("settings files: %d new, %d changed\n", newFiles, modified)
-	cmd.Printf("lock: %d versions recorded, %d changed in %s\n", len(sp.Lock.Current), len(sp.Lock.Changes), sp.Lock.Path)
+	cmd.Printf("node %s: %d versions recorded, %d changed in %s\n", sp.Node.Node.Name, len(sp.Node.Node.Apps), len(sp.Node.Changes), sp.Node.Node.Path)
 
 	for _, f := range r.Findings {
 		cmd.Printf("  redacted secret: %s line %d (%s)\n", f.Path, f.Line, f.Key)

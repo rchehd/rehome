@@ -41,6 +41,8 @@ type Options struct {
 	HarnessData  bool
 	Sessions     bool
 	SessionPaths map[string]string
+	// FilesRoot is the node folder settings files are compared with; empty means root.
+	FilesRoot string
 }
 
 type scanner struct {
@@ -150,6 +152,14 @@ func Run(ctx context.Context, r *runner.Runner, p platform.Platform, cat *catalo
 	s.res.Config = &config.Config{Version: config.CurrentVersion, Apps: s.sortedApps(), AptRepos: cfg.AptRepos, AptKeys: cfg.AptKeys, Files: cfg.Files, Capture: cfg.Capture}
 
 	return s.res, nil
+}
+
+func (s *scanner) filesRoot() string {
+	if s.options.FilesRoot != "" {
+		return s.options.FilesRoot
+	}
+
+	return s.root
 }
 
 func (s *scanner) addAll(found []adapter.Detected) {
@@ -281,6 +291,7 @@ func (s *scanner) captureRepos() error {
 		}
 
 		if c != nil {
+			c.Shared = true
 			s.addChanges([]files.Change{*c})
 		}
 	}
@@ -310,7 +321,7 @@ func (s *scanner) captureFiles() error {
 		progress.Step(s.ctx, "reading settings: %s", id)
 		entry, _ := s.cat.Get(app.Files)
 		if entry.SessionFormat != "" {
-			changes, mappings, warnings := files.CaptureSessions(s.ctx, entry, s.p.FileKey(), s.root, s.options.SessionPaths)
+			changes, mappings, warnings := files.CaptureSessions(s.ctx, entry, s.p.FileKey(), s.filesRoot(), s.options.SessionPaths)
 			for _, err := range warnings {
 				s.warn("%s: %v", id, err)
 			}
@@ -322,7 +333,7 @@ func (s *scanner) captureFiles() error {
 			s.addChanges(changes)
 			continue
 		}
-		changes, fileMaps, err := files.CaptureRules(entry.ID, entry.Files, s.p.FileKey(), s.root, s.options.HarnessData)
+		changes, fileMaps, err := files.CaptureRules(entry.ID, entry.Files, s.p.FileKey(), s.filesRoot(), s.options.HarnessData)
 
 		if err != nil {
 			s.warn("%s settings: %v", id, err)
@@ -350,7 +361,7 @@ func (s *scanner) captureFiles() error {
 
 	if _, ok := s.apps["claude-code"]; ok {
 		progress.Step(s.ctx, "reading settings: Claude MCP and plugins")
-		changes, err := ai.CaptureClaude(s.root)
+		changes, err := ai.CaptureClaude(s.filesRoot())
 
 		if err != nil {
 			s.warn("claude MCP/plugins: %v", err)
@@ -368,7 +379,7 @@ func (s *scanner) captureDconf() {
 	}
 
 	const id = "gnome-settings"
-	change, found, err := files.CaptureDconf(s.ctx, s.r, s.root)
+	change, found, err := files.CaptureDconf(s.ctx, s.r, s.filesRoot())
 
 	if err != nil {
 		s.warn("GNOME settings: %v", err)

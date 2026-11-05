@@ -21,7 +21,7 @@ type ScanReport struct {
 	Secrets   []secrets.Finding  `json:"redacted_secrets"`
 	Attention []discover.Warning `json:"needs_attention"`
 	Warnings  []string           `json:"warnings"`
-	Lock      LockReport         `json:"lock"`
+	Node      NodeReport         `json:"node"`
 }
 
 type AppsReport struct {
@@ -37,7 +37,8 @@ type FilesReport struct {
 	Changed int `json:"changed"`
 }
 
-type LockReport struct {
+type NodeReport struct {
+	Name     string   `json:"name"`
 	Path     string   `json:"path"`
 	Recorded int      `json:"recorded"`
 	Changed  []string `json:"changed"`
@@ -55,7 +56,7 @@ func (sp *ScanPlan) JSON(written bool) ScanReport {
 		Secrets:   sp.Result.Findings,
 		Attention: sp.Result.Attention,
 		Warnings:  sp.Result.Warnings,
-		Lock:      LockReport{Path: sp.Lock.Path, Recorded: len(sp.Lock.Current), Changed: sp.Lock.Changes},
+		Node:      NodeReport{Name: sp.Node.Node.Name, Path: sp.Node.Node.Path, Recorded: len(sp.Node.Node.Apps), Changed: sp.Node.Changes},
 	}
 
 	for _, c := range sp.Result.FileChanges {
@@ -91,7 +92,7 @@ type PlanReport struct {
 
 func PlanJSON(plan *install.Plan, options Options) PlanReport {
 	r := PlanReport{Mode: plan.Mode, Commands: plan.Commands(), RunAs: "rehome install --yes --versions " + plan.Mode}
-	for _, flag := range []struct{ name, value string }{{"config", options.Config}, {"lock", options.Lock}} {
+	for _, flag := range []struct{ name, value string }{{"config", options.Config}} {
 		if flag.value != "" {
 			r.RunAs += " --" + flag.name + " " + runner.Quote(flag.value)
 		}

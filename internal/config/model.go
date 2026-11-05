@@ -7,7 +7,7 @@ import (
 
 const (
 	FileName       = "rehome.yml"
-	CurrentVersion = 1
+	CurrentVersion = 2
 	AnyPlatform    = "any"
 	UnknownGroup   = "unknown"
 )
@@ -17,8 +17,9 @@ type Config struct {
 	Apps     []App              `yaml:"apps"`
 	AptRepos map[string]AptRepo `yaml:"apt_repos,omitempty"`
 	// AptKeys are legacy keys for /etc/apt/trusted.gpg.d, used by repos without signed-by.
-	AptKeys []string             `yaml:"apt_keys,omitempty"`
-	Files   map[string][]FileMap `yaml:"files,omitempty"`
+	AptKeys []string `yaml:"apt_keys,omitempty"`
+	// Files is never stored in rehome.yml: it is filled from the nodes chosen for each group.
+	Files map[string][]FileMap `yaml:"files,omitempty"`
 	// Ignore lists app ids a given machine (by hostname) never installs.
 	Ignore map[string][]string `yaml:"ignore,omitempty"`
 	// Capture holds settings rules per app id and file key (linux, macos) beyond the catalog.

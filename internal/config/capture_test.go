@@ -6,8 +6,8 @@ import (
 )
 
 func TestMergeAddsAutoCaptureButKeepsUserRule(t *testing.T) {
-	existing := "version: 1\napps: []\ncapture:\n  fish: # mine\n    linux: {base: ~/.config/fish, include: [config.fish]}\n"
-	scanned := &Config{Version: 1, Capture: map[string]map[string]FileRule{
+	existing := "version: 2\napps: []\ncapture:\n  fish: # mine\n    linux: {base: ~/.config/fish, include: [config.fish]}\n"
+	scanned := &Config{Version: 2, Capture: map[string]map[string]FileRule{
 		"fish": {"linux": {Base: "~/.config/fish", Include: []string{"**"}, Origin: OriginAuto}},
 		"mc":   {"linux": {Base: "~/.config/mc", Include: []string{"**"}, Origin: OriginAuto}},
 	}}

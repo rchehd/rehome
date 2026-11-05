@@ -166,3 +166,33 @@ func FreeName(nodes []*Node, name, id string) string {
 
 	return candidate
 }
+
+// Lock is this node's versions keyed by its platform, the shape install and status compare against.
+func (n *Node) Lock() *lock.Lock {
+	return Versions([]*Node{n})
+}
+
+// Versions merges the nodes' versions per platform: a newer version wins, and an entry that
+// cannot be ordered (a commit, another manager) comes from the most recently seen node.
+func Versions(nodes []*Node) *lock.Lock {
+	byAge := slices.Clone(nodes)
+	slices.SortStableFunc(byAge, func(a, b *Node) int { return a.LastSeen.Compare(b.LastSeen) })
+	l := lock.New()
+
+	for _, n := range byAge {
+		for id, e := range n.Apps {
+			if old, ok := l.Get(id, n.Platform); ok && orderable(old, e) && lock.Compare(e.Manager, e.Version, old.Version) < 0 {
+				continue
+			}
+
+			l.Set(id, n.Platform, e)
+		}
+	}
+
+	return l
+}
+
+func orderable(a, b lock.Entry) bool {
+	return a.Manager == b.Manager && a.Version != "" && b.Version != "" &&
+		a.Commit == "" && b.Commit == "" && !a.Unsupported && !b.Unsupported
+}

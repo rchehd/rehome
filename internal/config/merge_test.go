@@ -62,7 +62,7 @@ func TestMergeIntoEmpty(t *testing.T) {
 }
 
 func TestMergeKeepsUserEditsByteForByte(t *testing.T) {
-	existing := `version: 1
+	existing := `version: 2
 apps:
   # my favourite shell
   - id: zsh

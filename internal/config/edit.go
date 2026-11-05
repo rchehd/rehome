@@ -10,7 +10,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-const emptyConfig = "version: 1\napps: []\n"
+const emptyConfig = "version: 2\napps: []\n"
 
 // Edit changes the config file through its YAML tree, so comments and order survive; the
 // result must validate before it is written.

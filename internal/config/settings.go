@@ -137,6 +137,21 @@ func DefaultClonePath() (string, error) {
 	return filepath.Join(home, ".local", "share", "rehome", "config"), nil
 }
 
+// StateDir holds machine-local state such as settings backups.
+func StateDir() (string, error) {
+	if dir := os.Getenv("XDG_STATE_HOME"); dir != "" {
+		return filepath.Join(dir, "rehome"), nil
+	}
+
+	home, err := os.UserHomeDir()
+
+	if err != nil {
+		return "", err
+	}
+
+	return filepath.Join(home, ".local", "state", "rehome"), nil
+}
+
 func settingsPath() (string, error) {
 	dir, err := os.UserConfigDir()
 

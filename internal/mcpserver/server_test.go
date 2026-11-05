@@ -38,7 +38,7 @@ func connect(t *testing.T, cfgPath string) *mcp.ClientSession {
 func tempConfig(t *testing.T) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), config.FileName)
-	os.WriteFile(path, []byte("version: 1\napps:\n  - id: htop\n    install: {debian: {apt: htop}}\n"), 0o644)
+	os.WriteFile(path, []byte("version: 2\napps:\n  - id: htop\n    install: {debian: {apt: htop}}\n"), 0o644)
 
 	return path
 }

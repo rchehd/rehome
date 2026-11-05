@@ -11,6 +11,7 @@ import (
 	"github.com/rchehd/rehome/internal/config"
 	"github.com/rchehd/rehome/internal/install"
 	"github.com/rchehd/rehome/internal/lock"
+	"github.com/rchehd/rehome/internal/node"
 	"github.com/rchehd/rehome/internal/platform"
 	"github.com/rchehd/rehome/internal/runner"
 )
@@ -18,8 +19,8 @@ import (
 type Options struct {
 	// Config is the --config value (path, folder or URL); empty uses the linked repo.
 	Config string
-	// Lock is the --lock value; empty means rehome.lock next to the config.
-	Lock         string
+	// Version is this rehome's version, recorded in the node.
+	Version      string
 	Runner       *runner.Runner
 	HarnessData  bool
 	Sessions     bool
@@ -59,40 +60,41 @@ func LoadConfig(o Options) (*config.Config, string, error) {
 	return cfg, root, nil
 }
 
-// InstallInput is everything needed to build an install plan.
+// InstallInput is everything needed to build an install plan: settings come from the freshest
+// node with each group, versions from the live nodes.
 type InstallInput struct {
-	Config   *config.Config
-	Root     string
-	Platform platform.Platform
-	Lock     *lock.Lock
+	Config    *config.Config
+	Root      string
+	FileRoots map[string]string
+	Platform  platform.Platform
+	Lock      *lock.Lock
+	Workspace *Workspace
 }
 
 func LoadInstall(o Options) (*InstallInput, error) {
-	cfg, root, err := LoadConfig(o)
+	w, err := LoadWorkspace(o)
 
 	if err != nil {
 		return nil, err
 	}
 
-	p, err := platform.Detect()
+	cfg, roots := w.WithFiles(w.FreshestFiles)
 
-	if err != nil {
-		return nil, err
-	}
-
-	lk, err := lock.Load(lock.Path(root, o.Lock))
-
-	if err != nil {
-		return nil, err
-	}
-
-	return &InstallInput{Config: cfg, Root: root, Platform: p, Lock: lk}, nil
+	return &InstallInput{Config: cfg, Root: w.Root, FileRoots: roots, Platform: w.Platform, Lock: node.Versions(w.Live()), Workspace: w}, nil
 }
 
 func BuildPlan(ctx context.Context, o Options, in *InstallInput, sel install.Selection) (*install.Plan, error) {
 	o.logf("checking what is installed …")
+	plan, err := install.Build(ctx, o.Runner, in.Config, in.Root, in.Platform, sel, in.Lock)
 
-	return install.Build(ctx, o.Runner, in.Config, in.Root, in.Platform, sel, in.Lock)
+	if err != nil {
+		return nil, err
+	}
+
+	plan.FileRoots = in.FileRoots
+	plan.Recorded = in.Workspace.Record
+
+	return plan, nil
 }
 
 // DefaultMode is the install mode without an explicit choice: the lock's versions if any.

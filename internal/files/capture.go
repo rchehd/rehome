@@ -24,6 +24,8 @@ type Change struct {
 	Old, New []byte
 	Mode     fs.FileMode
 	Findings []secrets.Finding
+	// Shared marks a file kept at the config root for every node, such as an apt keyring.
+	Shared bool
 }
 
 // Capture collects an app's settings files by its catalog rules.

@@ -358,7 +358,7 @@ func (x *executor) applyFiles(s Step) bool {
 	}
 
 	x.progress(Event{ID: s.App.ID, Phase: "settings"})
-	results, err := files.Apply(x.ctx, x.plan.Root, x.plan.Config.Files[s.App.Files], files.ApplyOptions{
+	results, err := files.Apply(x.ctx, x.plan.FilesRoot(s.App.Files), x.plan.Config.Files[s.App.Files], files.ApplyOptions{
 		FileKey:       x.plan.Platform.FileKey(),
 		WSL:           x.plan.Platform.WSL,
 		HarnessData:   x.opts.HarnessData,
@@ -469,7 +469,7 @@ func (x *executor) restoreClaude() {
 	}
 
 	x.progress(Event{ID: "claude-code", Phase: "plugins and MCP"})
-	notes, errs := ai.RestoreClaude(x.ctx, x.r, x.plan.Root)
+	notes, errs := ai.RestoreClaude(x.ctx, x.r, x.plan.FilesRoot("claude-code"))
 	x.report.ManualSecrets = append(x.report.ManualSecrets, notes...)
 
 	for _, err := range errs {

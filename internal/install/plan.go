@@ -41,12 +41,25 @@ type Step struct {
 }
 
 type Plan struct {
-	Steps    []Step
-	Config   *config.Config
-	Root     string
-	Platform platform.Platform
-	Lock     *lock.Lock
-	Mode     string
+	Steps  []Step
+	Config *config.Config
+	// Root holds rehome.yml and the shared apt files; FileRoots maps a settings group to its node folder.
+	Root      string
+	FileRoots map[string]string
+	Platform  platform.Platform
+	Lock      *lock.Lock
+	Mode      string
+	// Recorded receives the version of each app installed or found by the run.
+	Recorded func(id string, e lock.Entry)
+}
+
+// FilesRoot is the folder a settings group's files/ paths resolve against.
+func (p *Plan) FilesRoot(group string) string {
+	if root, ok := p.FileRoots[group]; ok {
+		return root
+	}
+
+	return p.Root
 }
 
 const (

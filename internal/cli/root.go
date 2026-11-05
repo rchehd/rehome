@@ -17,7 +17,6 @@ var Version = "dev"
 
 type globalFlags struct {
 	config       string
-	lock         string
 	json         bool
 	dryRun       bool
 	verbose      bool
@@ -57,7 +56,6 @@ func newRoot() *cobra.Command {
 	root.SetVersionTemplate("rehome {{.Version}}\n")
 	pf := root.PersistentFlags()
 	pf.StringVar(&flags.config, "config", "", "config file path or URL")
-	pf.StringVar(&flags.lock, "lock", "", "lock file path (default: rehome.lock next to the config)")
 	pf.BoolVar(&flags.json, "json", false, "print machine-readable JSON (for scripts and agents)")
 	pf.BoolVar(&flags.dryRun, "dry-run", false, "print what would be done without changing anything")
 	pf.BoolVarP(&flags.verbose, "verbose", "v", false, "print every command")
@@ -81,7 +79,7 @@ func newVersionCmd() *cobra.Command {
 }
 
 func opts(cmd *cobra.Command) app.Options {
-	return app.Options{Config: flags.config, Lock: flags.lock, Runner: newRunner(), Log: cmd.ErrOrStderr(), HarnessData: flags.harnessData, Sessions: flags.sessions, SessionPaths: flags.sessionPaths}
+	return app.Options{Config: flags.config, Version: Version, Runner: newRunner(), Log: cmd.ErrOrStderr(), HarnessData: flags.harnessData, Sessions: flags.sessions, SessionPaths: flags.sessionPaths}
 }
 
 // report prints v as JSON under --json, otherwise the text.
