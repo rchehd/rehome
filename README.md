@@ -43,6 +43,14 @@ git clone https://github.com/rchehd/rehome.git && cd rehome
 CGO_ENABLED=0 go build -o ~/.local/bin/rehome ./cmd/rehome
 ```
 
+Tab completion for commands, flags and app names:
+
+```bash
+echo 'source <(rehome completion zsh)' >> ~/.zshrc     # zsh
+echo 'source <(rehome completion bash)' >> ~/.bashrc   # bash
+rehome completion fish > ~/.config/fish/completions/rehome.fish
+```
+
 ## Quick start
 
 On the machine you have already set up:
