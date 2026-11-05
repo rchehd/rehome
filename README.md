@@ -177,6 +177,9 @@ Comments in `rehome.yml` are kept, and a change that would make the config inval
 
 ## Using with an AI agent
 
+At the end of an interactive `rehome install` or `rehome sync`, rehome offers to connect to detected AI agents
+that do not have it registered yet. Confirm the prompt to add the MCP server to their user settings.
+
 `rehome mcp` serves rehome to agents over MCP. Register it with every agent found on this machine
 (Claude Code, Codex, Cursor) in one go:
 

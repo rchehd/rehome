@@ -135,7 +135,7 @@ func installInteractive(cmd *cobra.Command, plan *install.Plan, f installFlags, 
 	if len(sel.IDs) == 0 {
 		cmd.Println("nothing selected")
 
-		return nil
+		return offerMCPInstall(cmd)
 	}
 
 	sel.All = f.all
@@ -168,6 +168,10 @@ func installInteractive(cmd *cobra.Command, plan *install.Plan, f installFlags, 
 		reviewKeptLocal(cmd, report)
 	}
 	report.Print(cmd.OutOrStdout())
+
+	if err := offerMCPInstall(cmd); err != nil {
+		return err
+	}
 
 	return exitCode(report)
 }
