@@ -83,7 +83,7 @@ func v1to2(root string, self *node.Node, dry bool) ([]string, error) {
 		self.Apps = map[string]lock.Entry{}
 
 		for id, byPlatform := range old.Apps {
-			if e, ok := byPlatform[self.Platform]; ok {
+			if e, ok := byPlatform[self.Platform]; ok && !e.Unsupported {
 				self.Apps[id] = e
 			}
 		}
