@@ -8,8 +8,8 @@ import (
 
 	"github.com/rchehd/rehome/internal/app"
 	"github.com/rchehd/rehome/internal/config"
-	"github.com/rchehd/rehome/internal/gitsync"
 	"github.com/rchehd/rehome/internal/progress"
+	"github.com/rchehd/rehome/internal/source"
 	"github.com/rchehd/rehome/internal/status"
 	"github.com/rchehd/rehome/internal/tui"
 )
@@ -76,7 +76,7 @@ func computeStatus(ctx context.Context, o app.Options) (*status.Status, error) {
 
 	if s.Linked() {
 		progress.Step(ctx, "checking the config repo")
-		st.Source = gitsync.RemoteStatus(ctx, s.ClonePath)
+		st.Source = source.Open(s, false, nil).Status(ctx)
 	}
 
 	return st, nil

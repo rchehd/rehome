@@ -19,29 +19,27 @@ func (g Git) Clone(ctx context.Context, url, path string) error {
 	return g.run(ctx, "", "clone", url, path)
 }
 
-// Pull fast-forwards only; a diverged history is left for the user to resolve.
+// Pull rebases local commits onto the remote, keeping uncommitted changes aside meanwhile.
 func (g Git) Pull(ctx context.Context, path string) error {
-	return g.run(ctx, path, "pull", "--ff-only")
+	return g.run(ctx, path, "pull", "--rebase", "--autostash")
 }
 
-// Push commits every change in the repo (if any) and pushes it.
-func (g Git) Push(ctx context.Context, path, message string) error {
+// Commit records every change in the repo, if there is any.
+func (g Git) Commit(ctx context.Context, path, message string) error {
 	if err := g.run(ctx, path, "add", "-A"); err != nil {
 		return err
 	}
 
 	dirty, err := g.dirty(ctx, path)
 
-	if err != nil {
+	if err != nil || !dirty {
 		return err
 	}
 
-	if dirty {
-		if err := g.run(ctx, path, "commit", "-m", message); err != nil {
-			return err
-		}
-	}
+	return g.run(ctx, path, "commit", "-m", message)
+}
 
+func (g Git) PushOnly(ctx context.Context, path string) error {
 	return g.run(ctx, path, "push")
 }
 

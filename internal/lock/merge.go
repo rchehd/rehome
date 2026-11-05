@@ -44,4 +44,3 @@ func orderable(a, b Entry) bool {
 	return a.Manager == b.Manager && a.Version != "" && b.Version != "" &&
 		a.Commit == "" && b.Commit == "" && !a.Unsupported && !b.Unsupported
 }
-

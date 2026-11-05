@@ -11,11 +11,11 @@ import (
 	"github.com/rchehd/rehome/internal/app"
 	"github.com/rchehd/rehome/internal/config"
 	"github.com/rchehd/rehome/internal/files"
-	"github.com/rchehd/rehome/internal/gitsync"
 	"github.com/rchehd/rehome/internal/install"
 	"github.com/rchehd/rehome/internal/lock"
 	"github.com/rchehd/rehome/internal/secrets"
 	"github.com/rchehd/rehome/internal/sessions"
+	"github.com/rchehd/rehome/internal/source"
 	"github.com/rchehd/rehome/internal/tui"
 )
 
@@ -88,9 +88,7 @@ func newApplyCmd(name, description string, sync bool) *cobra.Command {
 						cmd.PrintErrln("dry run: the install preview uses the current local config")
 					}
 
-					git := gitsync.Git{DryRun: flags.dryRun, Stdout: cmd.ErrOrStderr()}
-
-					if err := git.Pull(cmd.Context(), s.ClonePath); err != nil {
+					if err := source.Open(s, flags.dryRun, cmd.ErrOrStderr()).Pull(cmd.Context()); err != nil {
 						return err
 					}
 				}

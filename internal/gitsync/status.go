@@ -16,6 +16,8 @@ const (
 	SourceDirty   SourceStatus = "local_changes"
 	SourceChanged SourceStatus = "remote_changed"
 	SourceUnknown SourceStatus = "unavailable"
+	// SourceLocal is a folder used in place, with nothing to publish.
+	SourceLocal SourceStatus = "local_folder"
 )
 
 func RemoteStatus(ctx context.Context, path string) SourceStatus {

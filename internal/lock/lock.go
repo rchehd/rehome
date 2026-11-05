@@ -42,4 +42,3 @@ func (l *Lock) Clone() *Lock {
 
 	return c
 }
-

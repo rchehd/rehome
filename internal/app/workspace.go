@@ -103,6 +103,25 @@ func (w *Workspace) Record(id string, e lock.Entry) {
 	}
 }
 
+// TouchNode records that this machine's node was seen now, if it has been scanned here.
+func TouchNode(root, id string) error {
+	nodes, err := node.List(root)
+
+	if err != nil {
+		return err
+	}
+
+	n := node.Find(nodes, id)
+
+	if n == nil {
+		return nil
+	}
+
+	n.LastSeen = time.Now().UTC().Truncate(time.Second)
+
+	return n.Save()
+}
+
 // Live is the nodes that pushed recently enough to count.
 func (w *Workspace) Live() []*node.Node {
 	now := time.Now()

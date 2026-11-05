@@ -43,7 +43,7 @@ type Status struct {
 }
 
 func (s *Status) Clean() bool {
-	return (s.Source == "" || s.Source == gitsync.SourceCurrent) &&
+	return (s.Source == "" || s.Source == gitsync.SourceCurrent || s.Source == gitsync.SourceLocal) &&
 		len(s.Missing)+len(s.New)+len(s.ChangedFiles)+len(s.Behind)+len(s.NotSynced) == 0
 }
 

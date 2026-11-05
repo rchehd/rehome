@@ -19,8 +19,10 @@ func (s *Status) SourceLabel() string {
 		return "local config edits to publish (rehome push)"
 	case gitsync.SourceChanged:
 		return "updates available (rehome sync)"
+	case gitsync.SourceLocal:
+		return "folder, written in place"
 	case gitsync.SourceUnknown:
-		return "could not check the linked Git branch"
+		return "could not check the config source"
 	default:
 		return "local comparison"
 	}
