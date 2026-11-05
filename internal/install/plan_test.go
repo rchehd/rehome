@@ -1,6 +1,8 @@
 package install
 
 import (
+	"os"
+	"path/filepath"
 	"slices"
 	"testing"
 
@@ -171,5 +173,45 @@ func TestPlanCommands(t *testing.T) {
 
 	if got := plan.Commands(); !slices.Equal(got, want) {
 		t.Errorf("commands = %v, want %v", got, want)
+	}
+}
+
+func TestPluginInstallLocationIsNotInterchangeableWithApt(t *testing.T) {
+	for _, location := range []string{"package-only", "wrong-location", "expected-clone"} {
+		t.Run(location, func(t *testing.T) {
+			home, bin := t.TempDir(), t.TempDir()
+			t.Setenv("HOME", home)
+			t.Setenv("PATH", bin)
+			for _, command := range []string{"dpkg-query", "apt-get"} {
+				if err := os.WriteFile(filepath.Join(bin, command), []byte("#!/bin/sh\nprintf installed\n"), 0o755); err != nil {
+					t.Fatal(err)
+				}
+			}
+			for _, path := range []string{"usr/share/zsh-syntax-highlighting", map[string]string{"package-only": "unused", "wrong-location": ".oh-my-zsh/other/plugins/zsh-syntax-highlighting", "expected-clone": ".oh-my-zsh/custom/plugins/zsh-syntax-highlighting"}[location]} {
+				if err := os.MkdirAll(filepath.Join(home, path), 0o755); err != nil {
+					t.Fatal(err)
+				}
+			}
+			aptSpec := config.InstallSpec{Apt: "zsh-syntax-highlighting"}
+			pluginSpec := config.InstallSpec{Script: "git clone fixture", Bin: "~/.oh-my-zsh/custom/plugins/zsh-syntax-highlighting"}
+			cfg := &config.Config{Apps: []config.App{
+				{ID: "zsh-syntax-highlighting", Install: map[string]config.InstallSpec{"debian": aptSpec}},
+				{ID: "oh-my-zsh-zsh-syntax-highlighting", Install: map[string]config.InstallSpec{"any": pluginSpec}},
+			}}
+			p := platform.Platform{OS: "linux", ID: "ubuntu"}
+			plan, err := Build(t.Context(), &runner.Runner{}, cfg, "", p, Selection{Offline: true}, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, step := range plan.Steps {
+				want := StatusInstalled
+				if step.App.ID == "oh-my-zsh-zsh-syntax-highlighting" && location != "expected-clone" {
+					want = StatusInstall
+				}
+				if step.Status != want {
+					t.Errorf("%s status = %s, want %s", step.App.ID, step.Status, want)
+				}
+			}
+		})
 	}
 }

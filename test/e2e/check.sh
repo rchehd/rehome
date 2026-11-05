@@ -62,6 +62,9 @@ as_dev "./rehome config add-install jq --apt jq --group tools --config cfg" > /t
 check "config add-install edits the config" 'grep -q "id: jq" $home/cfg/rehome.yml'
 as_dev "./rehome status --json --config cfg" > /tmp/status.json 2>/dev/null
 check "status --json lists the new app as missing" 'grep -q "\"clean\": false" /tmp/status.json && grep -A5 "\"missing\"" /tmp/status.json | grep -q "\"jq\""'
+check "status --json includes installed and recorded versions" 'grep -A18 '\''"cowsay": {'\'' /tmp/status.json | grep -q '\''"Version": "1.6.0"'\'' && grep -A18 '\''"cowsay": {'\'' /tmp/status.json | grep -q '\''"Version": "1.5.0"'\'''
+as_dev "./rehome status --details --config cfg" > /tmp/status-details.log 2>/dev/null
+check "status --details compares versions in named columns" 'grep -q "ON MACHINE" /tmp/status-details.log && grep -q "IN CONFIG" /tmp/status-details.log && grep -q "cowsay" /tmp/status-details.log && grep -q "1.6.0" /tmp/status-details.log && grep -q "1.5.0" /tmp/status-details.log'
 as_dev "./rehome install --dry-run --json --config cfg" > /tmp/plan.json 2>/dev/null
 check "install --dry-run --json returns the command for a person" 'grep -q "\"run_as\"" /tmp/plan.json'
 
@@ -111,6 +114,13 @@ if as_dev "bash /e2e/sessions.sh /home/dev/rehome"; then
   pass "session opt-in capture, redaction, relocation and repeat import"
 else
   fail "session opt-in capture, redaction, relocation and repeat import"
+fi
+
+echo "== automatic capture"
+if as_dev "bash /e2e/autocapture.sh /home/dev/rehome"; then
+  pass "fresh and legacy auto rules exclude runtime/Desktop sessions in scan and status"
+else
+  fail "fresh and legacy auto rules exclude runtime/Desktop sessions in scan and status"
 fi
 
 echo "== $failures failure(s)"

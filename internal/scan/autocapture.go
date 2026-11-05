@@ -44,6 +44,9 @@ func (s *scanner) captureByRules() {
 			rules = map[string]config.FileRule{key: *rule}
 		}
 
+		rules = maps.Clone(rules)
+		rules[key] = rules[key].WithAutoDefaults()
+
 		changes, fileMaps, err := files.CaptureRules(id, rules, key, s.root, s.options.HarnessData)
 
 		if err != nil {

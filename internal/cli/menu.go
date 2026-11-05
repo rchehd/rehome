@@ -40,13 +40,23 @@ func runMenu(cmd *cobra.Command) error {
 		sub := menuCommands[choice]()
 		sub.SetContext(cmd.Context())
 		sub.SetOut(os.Stdout)
-
-		if err := sub.RunE(sub, nil); err != nil {
-			if _, isExit := err.(ExitError); !isExit {
-				cmd.PrintErrln("error:", err)
+		if choice == "status" {
+			if err := sub.Flags().Set("interactive", "true"); err != nil {
+				return err
 			}
 		}
 
+		runErr := sub.RunE(sub, nil)
+		if runErr != nil {
+			if _, isExit := runErr.(ExitError); !isExit {
+				cmd.PrintErrln("error:", runErr)
+			}
+		}
+
+		_, isExit := runErr.(ExitError)
+		if choice == "status" && (runErr == nil || isExit) {
+			continue
+		}
 		ask(cmd, "\npress enter to return to the menu", "")
 	}
 }

@@ -35,6 +35,7 @@ func Capture(e *catalog.Entry, fileKey, root string) ([]Change, []config.FileMap
 // file mappings for the config.
 func CaptureRules(id string, rules map[string]config.FileRule, fileKey, root string, harnessData bool) ([]Change, []config.FileMap, error) {
 	rule, ok := rules[fileKey]
+	rule = rule.WithAutoDefaults()
 
 	if !ok || rule.Base == "" {
 		return nil, nil, nil
@@ -158,7 +159,7 @@ func Select(base string, rule config.FileRule) ([]string, error) {
 // selectFiles walks only the directories an include pattern can reach. It follows symlinks,
 // so dotfiles linked in by stow and similar tools are found; a loop is walked once.
 func selectFiles(base string, rule config.FileRule) ([]string, error) {
-	w := &walker{base: base, rule: rule, seen: map[string]bool{}}
+	w := &walker{base: base, rule: rule.WithAutoDefaults(), seen: map[string]bool{}}
 
 	for _, inc := range rule.Include {
 		start := staticPrefix(inc)

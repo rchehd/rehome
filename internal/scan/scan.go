@@ -89,6 +89,15 @@ func Run(ctx context.Context, r *runner.Runner, p platform.Platform, cat *catalo
 		s.addAll(found)
 	}
 
+	if p.Key() == "debian" && adapter.HasCmd("apt-mark") {
+		if reason := apt.BaselineWarning(ctx, r); reason != "" {
+			s.res.Attention = append(s.res.Attention, discover.Warning{
+				Path: "/var/log/installer/initial-status.gz", Reason: reason,
+				Action: "review new packages before publishing; disable unwanted apps with rehome config set <app> enabled=false",
+			})
+		}
+	}
+
 	known := map[string]bool{}
 
 	for _, e := range cat.Present(p.Key()) {
@@ -327,6 +336,7 @@ func (s *scanner) captureFiles() error {
 
 	s.captureByRules()
 	s.captureDconf()
+	s.res.Attention = append(s.res.Attention, discover.DesktopSessions()...)
 	s.res.Attention = append(s.res.Attention, unclaimedConfigDirs(s.res.Config, s.cat, s.p.FileKey())...)
 
 	if _, ok := s.apps["claude-code"]; ok {

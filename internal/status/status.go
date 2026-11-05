@@ -3,11 +3,10 @@ package status
 import (
 	"context"
 	"fmt"
-	"io"
-	"strings"
 
 	"github.com/rchehd/rehome/internal/catalog"
 	"github.com/rchehd/rehome/internal/config"
+	"github.com/rchehd/rehome/internal/discover"
 	"github.com/rchehd/rehome/internal/files"
 	"github.com/rchehd/rehome/internal/gitsync"
 	"github.com/rchehd/rehome/internal/install"
@@ -17,10 +16,19 @@ import (
 	"github.com/rchehd/rehome/internal/scan"
 )
 
+type AppVersions struct {
+	Installed lock.Entry `json:"installed"`
+	Recorded  lock.Entry `json:"recorded"`
+	Pinned    string     `json:"pinned,omitempty"`
+}
+
 type Status struct {
-	Source gitsync.SourceStatus `json:"source_status,omitempty"`
+	Source   gitsync.SourceStatus   `json:"source_status,omitempty"`
+	Versions map[string]AppVersions `json:"versions,omitempty"`
 	// Missing are enabled config apps not installed here.
-	Missing []string `json:"missing"`
+	Missing        []string           `json:"missing"`
+	MissingReasons map[string]string  `json:"missing_reasons,omitempty"`
+	Attention      []discover.Warning `json:"needs_attention,omitempty"`
 	// New are apps installed here but absent from the config.
 	New []string `json:"new"`
 	// ChangedFiles are settings that differ between the system and files/.
@@ -46,16 +54,15 @@ func Compute(ctx context.Context, r *runner.Runner, cfg *config.Config, existing
 		return nil, err
 	}
 
-	st := &Status{}
+	st := &Status{MissingReasons: map[string]string{}}
 
 	for _, s := range plan.Steps {
 		switch {
 		case s.Status == install.StatusInstall:
 			st.Missing = append(st.Missing, s.App.ID)
+			st.MissingReasons[s.App.ID] = missingReason(s.Spec)
 		case s.Status == install.StatusUnavailable && (len(s.App.Install) > 0 || p.WSL && s.App.Files != ""):
 			st.Unsupported = append(st.Unsupported, s.App.ID)
-		case s.Upgrade != (lock.Entry{}):
-			st.Behind = append(st.Behind, fmt.Sprintf("%s %s → %s", s.App.ID, s.Installed, s.Upgrade.Version))
 		}
 	}
 
@@ -71,6 +78,7 @@ func Compute(ctx context.Context, r *runner.Runner, cfg *config.Config, existing
 		return nil, err
 	}
 
+	st.Attention = res.Attention
 	st.New = report.Added
 	found := map[string]bool{}
 
@@ -78,7 +86,8 @@ func Compute(ctx context.Context, r *runner.Runner, cfg *config.Config, existing
 		found[a.ID] = true
 	}
 
-	_, st.NotSynced = lock.Sync(repo, local, scan.Versions(ctx, r, cfg, found, p), p.Key())
+	current := scan.Versions(ctx, r, cfg, found, p)
+	st.compareVersions(plan.Steps, current, repo, local, p.Key())
 
 	for _, c := range res.FileChanges {
 		st.ChangedFiles = append(st.ChangedFiles, c.Dst)
@@ -112,45 +121,13 @@ func Compute(ctx context.Context, r *runner.Runner, cfg *config.Config, existing
 	return st, nil
 }
 
-func (s *Status) Print(w io.Writer) {
-	switch s.Source {
-	case gitsync.SourceCurrent:
-		fmt.Fprintln(w, "config source: up to date")
-	case gitsync.SourceAhead:
-		fmt.Fprintln(w, "config source: local commits to publish (rehome push)")
-	case gitsync.SourceDirty:
-		fmt.Fprintln(w, "config source: local config changes to publish (rehome push)")
-	case gitsync.SourceChanged:
-		fmt.Fprintln(w, "config source: updates available (rehome sync)")
-	case gitsync.SourceUnknown:
-		fmt.Fprintln(w, "config source: could not check the linked Git branch")
-	}
-
-	if len(s.Unsupported) > 0 {
-		fmt.Fprintf(w, "not available on this OS (%d): %s\n", len(s.Unsupported), strings.Join(s.Unsupported, ", "))
-	}
-
-	if s.Clean() {
-		fmt.Fprintln(w, "in sync: the system matches the config")
-
-		return
-	}
-
-	section := func(title string, items []string) {
-		if len(items) == 0 {
-			return
+func missingReason(spec config.InstallSpec) string {
+	manager, pkg := spec.Manager()
+	if manager == "script" {
+		if spec.Bin != "" {
+			return "script install expects " + spec.Bin
 		}
-
-		fmt.Fprintf(w, "%s (%d):\n", title, len(items))
-
-		for _, i := range items {
-			fmt.Fprintf(w, "  %s\n", i)
-		}
+		return "script install has no detection path"
 	}
-
-	section("missing on this system (rehome install)", s.Missing)
-	section("new on this system (rehome scan)", s.New)
-	section("settings differ from files/ (rehome scan)", s.ChangedFiles)
-	section("older than rehome.lock (rehome install --upgrade)", s.Behind)
-	section("versions changed here, not in rehome.lock yet (rehome scan)", s.NotSynced)
+	return "expected " + manager + " package " + pkg
 }
