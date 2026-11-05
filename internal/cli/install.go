@@ -50,7 +50,7 @@ func newApplyCmd(name, description string, sync bool) *cobra.Command {
 				return errors.New("--versions must be latest or locked")
 			}
 
-			options := install.Options{OverwriteFiles: f.overwrite, Upgrade: f.upgrade}
+			options := install.Options{OverwriteFiles: f.overwrite, Upgrade: f.upgrade, HarnessData: flags.harnessData}
 
 			if f.bitwarden {
 				if config.IsURL(flags.config) {

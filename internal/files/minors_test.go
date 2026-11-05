@@ -38,7 +38,7 @@ func TestPrivateModeTravelsThroughConfig(t *testing.T) {
 	src := filepath.Join(base, ".npmrc")
 	os.WriteFile(src, []byte("//registry/:_authToken=abcdef1234567890\n"), 0o600)
 	rules := map[string]config.FileRule{"linux": {Base: base, Include: []string{".npmrc"}}}
-	changes, maps, err := CaptureRules("npm", rules, "linux", root)
+	changes, maps, err := CaptureRules("npm", rules, "linux", root, false)
 
 	if err != nil || len(maps) != 1 || maps[0].Mode != "0600" {
 		t.Fatalf("maps %v err %v", maps, err)

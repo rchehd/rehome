@@ -62,6 +62,13 @@ If scan lists the tool as an unknown binary, add an install method and enable it
 `rehome status` reports the linked Git branch and local system separately. With `--config`, it compares
 the supplied config with the local system.
 
+### Transfer AI skills and subagents
+
+Use `rehome scan --harness-data` to include personal skills and subagents from Claude Code, Codex, and Cursor,
+including shared skills under `~/.agents/skills`. Review the captured files before sharing the config.
+On the receiving machine, use `rehome sync --harness-data` or `rehome install --harness-data --config <path>`.
+The usual settings still transfer by default. Built-in skills, plugin caches, and chat sessions are outside this transfer.
+
 ## What it picks up
 
 - **Packages:** apt (without the base OS, linked to third-party repos and their keys), snap, flatpak, Homebrew
@@ -69,7 +76,7 @@ the supplied config with the local system.
 - **Script installs** it knows from its catalog: Claude Code, Codex, oh-my-zsh and its plugins, uv, nvm, Go,
   JetBrains Toolbox, Zed, …
 - **Settings:** zsh, oh-my-zsh custom, fonts, git, gh, Sublime Text, JetBrains, kitty, Ghostty, Zed, Claude Code
-  and Codex (rules, skills, agents, hooks, MCP servers, plugins)
+  and Codex (rules, hooks, MCP servers, plugins). Personal skills and subagents use `--harness-data`.
 - **Unknown binaries** are listed disabled, so nothing is lost; add an install method to enable them
 
 Settings of apps outside the catalog are found automatically in the usual places (`~/.config/<app>`, `~/.<app>`,

@@ -20,7 +20,7 @@
     linux: &codexfiles
       base: ~/.codex
       include: [config.toml, "*.md", hooks.json, agents/**, prompts/**, skills/**, rules/**]
-      exclude: [auth.json, history.jsonl, "*.sqlite", cache/**, attachments/**, generated_images/**, "*.bak", "*.tmp-*", "**/node_modules/**", "**/.git/**"]
+      exclude: [auth.json, history.jsonl, "*.sqlite", cache/**, attachments/**, generated_images/**, skills/.system/**, "*.bak", "*.tmp-*", "**/node_modules/**", "**/.git/**"]
     macos: *codexfiles
 
 - id: cursor-agent
@@ -28,6 +28,28 @@
   install:
     any: { script: curl -fsSL https://cursor.com/install | bash, bin: cursor-agent }
   detect: { path: ~/.local/share/cursor-agent/versions/*, bins: [cursor-agent, agent] }
+
+- id: cursor-agent-data
+  group: ai
+  harness_only: true
+  detect: { paths: [~/.cursor/skills, ~/.cursor/agents] }
+  files:
+    linux: &cursorfiles
+      base: ~/.cursor
+      include: [skills/**, agents/**]
+      exclude: ["**/.git/**", "**/node_modules/**", "**/*.bak*"]
+    macos: *cursorfiles
+
+- id: shared-agent-skills
+  group: ai
+  harness_only: true
+  detect: { path: ~/.agents/skills }
+  files:
+    linux: &sharedskills
+      base: ~/.agents
+      include: [skills/**]
+      exclude: ["**/.git/**", "**/node_modules/**", "**/*.bak*"]
+    macos: *sharedskills
 
 - id: rtk
   group: ai

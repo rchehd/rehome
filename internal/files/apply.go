@@ -45,6 +45,7 @@ type ApplyResult struct {
 type ApplyOptions struct {
 	FileKey       string
 	WSL           bool
+	HarnessData   bool
 	Overwrite     bool
 	DryRun        bool
 	ResolveSecret func(string) (string, error)
@@ -56,6 +57,10 @@ func Apply(ctx context.Context, root string, maps []config.FileMap, opts ApplyOp
 	var results []ApplyResult
 
 	for _, m := range maps {
+		if !opts.HarnessData && isHarnessData(m.Dest[opts.FileKey]) {
+			continue
+		}
+
 		if m.Dconf {
 			res := applyDconf(ctx, root, m.Src, opts)
 			results = append(results, res)

@@ -47,13 +47,14 @@ type scanner struct {
 	hints map[string][]string
 	// existing is the config already in root; its capture rules are honoured.
 	existing           *config.Config
+	harnessData        bool
 	secretTemplates    map[string]bool
 	secretDestinations []os.FileInfo
 }
 
 // Run detects installed software and settings; nothing is written.
-func Run(ctx context.Context, r *runner.Runner, p platform.Platform, cat *catalog.Catalog, root string, existing *config.Config) (*Result, error) {
-	s := &scanner{ctx: ctx, r: r, p: p, cat: cat, root: root, apps: map[string]*config.App{}, res: &Result{}, hints: map[string][]string{}, existing: existing}
+func Run(ctx context.Context, r *runner.Runner, p platform.Platform, cat *catalog.Catalog, root string, existing *config.Config, harnessData bool) (*Result, error) {
+	s := &scanner{ctx: ctx, r: r, p: p, cat: cat, root: root, apps: map[string]*config.App{}, res: &Result{}, hints: map[string][]string{}, existing: existing, harnessData: harnessData}
 	s.protectSecretFiles()
 
 	if p.WSL {
@@ -81,6 +82,10 @@ func Run(ctx context.Context, r *runner.Runner, p platform.Platform, cat *catalo
 	known := map[string]bool{}
 
 	for _, e := range cat.Present(p.Key()) {
+		if e.HarnessOnly && !harnessData {
+			continue
+		}
+
 		s.add(adapter.Detected{Manager: "script", Name: e.ID})
 
 		for _, b := range e.Detect.Bins {
@@ -270,7 +275,7 @@ func (s *scanner) captureFiles() error {
 		}
 
 		entry, _ := s.cat.Get(app.Files)
-		changes, fileMaps, err := files.Capture(entry, s.p.FileKey(), s.root)
+		changes, fileMaps, err := files.CaptureRules(entry.ID, entry.Files, s.p.FileKey(), s.root, s.harnessData)
 
 		if err != nil {
 			s.warn("%s settings: %v", id, err)
