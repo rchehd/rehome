@@ -375,7 +375,7 @@ func TestCaptureRulesUserRule(t *testing.T) {
 	root := t.TempDir()
 	put(t, filepath.Join(base, "config.fish"), "set -g fish_greeting\n")
 	rules := map[string]config.FileRule{"linux": {Base: base, Include: []string{"*.fish"}}}
-	changes, maps, err := CaptureRules("fish", rules, "linux", root)
+	changes, maps, err := CaptureRules("fish", rules, "linux", root, false)
 
 	if err != nil {
 		t.Fatal(err)

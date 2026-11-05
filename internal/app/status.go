@@ -53,5 +53,5 @@ func Status(ctx context.Context, o Options) (*status.Status, error) {
 		return nil, err
 	}
 
-	return status.Compute(ctx, o.Runner, cfg, existing, root, p, cat, repo, local)
+	return status.Compute(ctx, o.Runner, cfg, existing, root, p, cat, repo, local, o.HarnessData)
 }

@@ -99,5 +99,12 @@ else
   fail "WSL plan, install and scan policy"
 fi
 
+echo "== harness data"
+if as_dev "bash /e2e/harness.sh /home/dev/rehome"; then
+  pass "harness opt-in capture, restore and local edits"
+else
+  fail "harness opt-in capture, restore and local edits"
+fi
+
 echo "== $failures failure(s)"
 [ "$failures" -eq 0 ]

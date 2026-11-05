@@ -53,5 +53,8 @@ check "scan records macOS installers" 'grep -q "brew: htop" "$work/scanned/rehom
 rehome debug config --config "$work/scanned" > "$work/debug.log" 2>&1
 check "scanned config is valid" 'grep -q " 0 errors" "$work/debug.log" || { cat "$work/debug.log"; false; }'
 
+echo "== harness data"
+check "harness opt-in capture, restore and local edits" 'bash "$root/test/e2e/harness.sh" "$work/rehome"'
+
 echo "== $failures failure(s)"
 [ "$failures" -eq 0 ]

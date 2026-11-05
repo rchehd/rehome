@@ -44,7 +44,7 @@ func (s *scanner) captureByRules() {
 			rules = map[string]config.FileRule{key: *rule}
 		}
 
-		changes, fileMaps, err := files.CaptureRules(id, rules, key, s.root)
+		changes, fileMaps, err := files.CaptureRules(id, rules, key, s.root, s.harnessData)
 
 		if err != nil {
 			s.warn("%s settings: %v", id, err)

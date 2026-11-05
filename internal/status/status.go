@@ -38,7 +38,7 @@ func (s *Status) Clean() bool {
 }
 
 // Compute compares the config with the system in both directions without writing anything.
-func Compute(ctx context.Context, r *runner.Runner, cfg *config.Config, existing []byte, root string, p platform.Platform, cat *catalog.Catalog, repo, local *lock.Lock) (*Status, error) {
+func Compute(ctx context.Context, r *runner.Runner, cfg *config.Config, existing []byte, root string, p platform.Platform, cat *catalog.Catalog, repo, local *lock.Lock, harnessData bool) (*Status, error) {
 	plan, err := install.Build(ctx, r, cfg, root, p, install.Selection{Offline: true}, repo)
 
 	if err != nil {
@@ -58,7 +58,7 @@ func Compute(ctx context.Context, r *runner.Runner, cfg *config.Config, existing
 		}
 	}
 
-	res, err := scan.Run(ctx, r, p, cat, root, cfg)
+	res, err := scan.Run(ctx, r, p, cat, root, cfg, harnessData)
 
 	if err != nil {
 		return nil, err

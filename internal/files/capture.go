@@ -28,12 +28,12 @@ type Change struct {
 
 // Capture collects an app's settings files by its catalog rules.
 func Capture(e *catalog.Entry, fileKey, root string) ([]Change, []config.FileMap, error) {
-	return CaptureRules(e.ID, e.Files, fileKey, root)
+	return CaptureRules(e.ID, e.Files, fileKey, root, false)
 }
 
 // CaptureRules collects settings files by rules per file key: changes to write and the
 // file mappings for the config.
-func CaptureRules(id string, rules map[string]config.FileRule, fileKey, root string) ([]Change, []config.FileMap, error) {
+func CaptureRules(id string, rules map[string]config.FileRule, fileKey, root string, harnessData bool) ([]Change, []config.FileMap, error) {
 	rule, ok := rules[fileKey]
 
 	if !ok || rule.Base == "" {
@@ -57,6 +57,12 @@ func CaptureRules(id string, rules map[string]config.FileRule, fileKey, root str
 
 	for _, rel := range rels {
 		src := filepath.Join(base, rel)
+		harnessFile := isHarnessData(src)
+
+		if harnessFile && !harnessData {
+			continue
+		}
+
 		info, err := os.Stat(src)
 
 		if err != nil || info.Size() > limit {
@@ -74,7 +80,7 @@ func CaptureRules(id string, rules map[string]config.FileRule, fileKey, root str
 		}
 
 		dst := path.Join("files", id, filepath.ToSlash(rel))
-		maps = append(maps, fileMap(rules, dst, rel, info.Mode().Perm()))
+		maps = append(maps, fileMap(rules, dst, rel, info.Mode().Perm(), harnessFile))
 		redacted, findings := secrets.Redact(adapter.Tilde(src), raw)
 		old, _ := os.ReadFile(filepath.Join(root, dst))
 
@@ -128,10 +134,10 @@ func WriteChanges(root string, cs []Change) error {
 	return nil
 }
 
-func fileMap(rules map[string]config.FileRule, dst, rel string, perm fs.FileMode) config.FileMap {
+func fileMap(rules map[string]config.FileRule, dst, rel string, perm fs.FileMode, harnessFile bool) config.FileMap {
 	m := config.FileMap{Src: dst, Dest: map[string]string{}}
 
-	if perm&0o077 == 0 {
+	if perm&0o077 == 0 || harnessFile && perm&0o111 != 0 {
 		m.Mode = fmt.Sprintf("%04o", perm)
 	}
 

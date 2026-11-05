@@ -16,11 +16,12 @@ import (
 var Version = "dev"
 
 type globalFlags struct {
-	config  string
-	lock    string
-	json    bool
-	dryRun  bool
-	verbose bool
+	config      string
+	lock        string
+	json        bool
+	dryRun      bool
+	verbose     bool
+	harnessData bool
 }
 
 var flags globalFlags
@@ -56,6 +57,7 @@ func newRoot() *cobra.Command {
 	pf.BoolVar(&flags.json, "json", false, "print machine-readable JSON (for scripts and agents)")
 	pf.BoolVar(&flags.dryRun, "dry-run", false, "print what would be done without changing anything")
 	pf.BoolVarP(&flags.verbose, "verbose", "v", false, "print every command")
+	pf.BoolVar(&flags.harnessData, "harness-data", false, "include user skills and subagents in scan, status, install and sync")
 
 	root.AddCommand(newVersionCmd(), newScanCmd(), newInstallCmd(), newSyncCmd(), newStatusCmd(), newConfigCmd(), newMCPCmd(), newLinkCmd(), newPushCmd(), newPullCmd(), newDebugCmd())
 
@@ -73,7 +75,7 @@ func newVersionCmd() *cobra.Command {
 }
 
 func opts(cmd *cobra.Command) app.Options {
-	return app.Options{Config: flags.config, Lock: flags.lock, Runner: newRunner(), Log: cmd.ErrOrStderr()}
+	return app.Options{Config: flags.config, Lock: flags.lock, Runner: newRunner(), Log: cmd.ErrOrStderr(), HarnessData: flags.harnessData}
 }
 
 // report prints v as JSON under --json, otherwise the text.
