@@ -84,9 +84,12 @@ func Compute(ctx context.Context, r *runner.Runner, cfg *config.Config, existing
 		st.ChangedFiles = append(st.ChangedFiles, c.Dst)
 	}
 	if options.Sessions {
-		for _, mappings := range cfg.Files {
+		for _, step := range plan.Steps {
+			if step.Status == install.StatusDisabled || step.Status == install.StatusIgnored || step.Status == install.StatusUnavailable {
+				continue
+			}
 			var sessionMaps []config.FileMap
-			for _, mapping := range mappings {
+			for _, mapping := range cfg.Files[step.App.Files] {
 				if mapping.Session != "" {
 					sessionMaps = append(sessionMaps, mapping)
 				}
