@@ -41,6 +41,7 @@ func newRoot() *cobra.Command {
 	root := &cobra.Command{
 		Use:           "rehome",
 		Short:         "Move your workstation to a new machine",
+		Version:       Version,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -53,6 +54,7 @@ func newRoot() *cobra.Command {
 	}
 
 	root.SetOut(os.Stdout)
+	root.SetVersionTemplate("rehome {{.Version}}\n")
 	pf := root.PersistentFlags()
 	pf.StringVar(&flags.config, "config", "", "config file path or URL")
 	pf.StringVar(&flags.lock, "lock", "", "lock file path (default: rehome.lock next to the config)")
