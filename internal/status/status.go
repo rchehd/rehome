@@ -34,9 +34,9 @@ type Status struct {
 	New []string `json:"new"`
 	// ChangedFiles are settings that differ between the system and files/.
 	ChangedFiles []string `json:"changed_files"`
-	// Behind are installed apps older than the lock ("id 1.2 → 1.3").
+	// Behind are installed apps older than on the other nodes ("id 1.2 → 1.3").
 	Behind []string `json:"behind_lock"`
-	// NotSynced are versions changed here that the next scan would record in the lock.
+	// NotSynced are versions changed here that the next scan would record in this node.
 	NotSynced []string `json:"not_in_lock"`
 	// Unsupported have no installer for this OS; informational, not a difference.
 	Unsupported []string `json:"unsupported"`

@@ -33,7 +33,7 @@ func (x *executor) install(s Step) error {
 	return s.Adapter.Install(x.ctx, x.r, s.Spec)
 }
 
-// upgrade raises installed apps older than the lock only when asked; otherwise it reports them.
+// upgrade raises installed apps older than on the source nodes only when asked; otherwise it reports them.
 func (x *executor) upgrade() {
 	for _, s := range x.plan.Steps {
 		if s.Upgrade == (lock.Entry{}) || x.state[s.App.ID] != "installed" {

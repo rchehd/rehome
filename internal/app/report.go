@@ -79,6 +79,7 @@ type PlanStep struct {
 	Installed string `json:"installed,omitempty"`
 	Upgrade   string `json:"upgrade,omitempty"`
 	Reason    string `json:"reason,omitempty"`
+	PinNote   string `json:"pin_note,omitempty"`
 	Mapped    string `json:"auto_mapped,omitempty"`
 }
 
@@ -91,7 +92,7 @@ type PlanReport struct {
 }
 
 func PlanJSON(plan *install.Plan, options Options) PlanReport {
-	r := PlanReport{Mode: plan.Mode, Commands: plan.Commands(), RunAs: "rehome install --yes --versions " + plan.Mode}
+	r := PlanReport{Mode: plan.Mode, Commands: plan.Commands(), RunAs: "rehome install --yes --version " + plan.Mode}
 	for _, flag := range []struct{ name, value string }{{"config", options.Config}} {
 		if flag.value != "" {
 			r.RunAs += " --" + flag.name + " " + runner.Quote(flag.value)
@@ -120,7 +121,7 @@ func PlanJSON(plan *install.Plan, options Options) PlanReport {
 		name, pkg := s.Spec.Manager()
 		r.Steps = append(r.Steps, PlanStep{
 			ID: s.App.ID, Status: s.Status, Manager: name, Package: pkg,
-			Pin: label(s.Pin), Installed: s.Installed, Upgrade: label(s.Upgrade), Reason: s.Reason, Mapped: s.Mapped,
+			Pin: label(s.Pin), Installed: s.Installed, Upgrade: label(s.Upgrade), Reason: s.Reason, PinNote: s.PinNote, Mapped: s.Mapped,
 		})
 	}
 

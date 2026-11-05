@@ -51,8 +51,8 @@ func newApplyCmd(name, description string, sync bool) *cobra.Command {
 				return errors.New("use --yes or --dry-run in non-interactive mode")
 			}
 
-			if f.versions != "" && f.versions != install.ModeLatest && f.versions != install.ModeLocked {
-				return errors.New("--versions must be latest or locked")
+			if f.versions != "" && f.versions != install.ModeLatest && f.versions != install.ModeSame {
+				return errors.New("--version must be same or latest")
 			}
 
 			options := install.Options{OverwriteFiles: f.overwrite, Upgrade: f.upgrade, HarnessData: flags.harnessData, Sessions: flags.sessions, SessionPaths: flags.sessionPaths}
@@ -119,8 +119,8 @@ func newApplyCmd(name, description string, sync bool) *cobra.Command {
 	fl.BoolVar(&f.missing, "missing", false, "install only what is missing (default)")
 	fl.BoolVarP(&f.yes, "yes", "y", false, "run without asking")
 	fl.BoolVar(&f.overwrite, "overwrite-files", false, "replace differing settings files (keeps .rehome.bak)")
-	fl.StringVar(&f.versions, "versions", "", "latest, or locked to install the versions from rehome.lock (default: locked when a lock exists)")
-	fl.BoolVar(&f.upgrade, "upgrade", false, "upgrade installed apps that are older than the lock")
+	fl.StringVar(&f.versions, "version", "", "same to install the versions the other nodes have, or latest (asked in a terminal, otherwise latest)")
+	fl.BoolVar(&f.upgrade, "upgrade", false, "upgrade installed apps that are older than on the other nodes")
 	fl.BoolVar(&f.offline, "offline", false, "map installers between OSes from local package indexes only (no Homebrew API, no Repology)")
 	fl.BoolVar(&f.bitwarden, "bitwarden", false, "restore settings from an unlocked Bitwarden vault")
 
@@ -221,20 +221,18 @@ func buildPlan(cmd *cobra.Command, sel install.Selection, f installFlags) (*inst
 	})
 }
 
-// installMode: the flag wins; with a lock the user picks (locked under --yes); no lock means latest.
+// installMode: the flag wins; in a terminal the user picks when other nodes recorded versions; otherwise latest.
 func installMode(f installFlags, lk *lock.Lock) (string, error) {
 	switch {
 	case f.versions != "":
 		return f.versions, nil
-	case len(lk.Apps) == 0:
+	case len(lk.Apps) == 0 || f.yes || flags.json || !interactive():
 		return install.ModeLatest, nil
-	case f.yes || flags.json || !interactive():
-		return install.ModeLocked, nil
 	}
 
-	choice, err := tui.Menu("rehome.lock found", []tui.MenuItem{
-		{Key: install.ModeLocked, Title: "Locked", Help: "install the same versions as in rehome.lock"},
-		{Key: install.ModeLatest, Title: "Latest", Help: "install the newest versions available"},
+	choice, err := tui.Menu("Which versions?", []tui.MenuItem{
+		{Key: install.ModeSame, Title: "Same", Help: "the versions the other nodes have, where the manager can install a fixed one"},
+		{Key: install.ModeLatest, Title: "Latest", Help: "the newest versions available"},
 	})
 
 	if err != nil {
@@ -264,6 +262,10 @@ func printPlan(cmd *cobra.Command, plan *install.Plan) {
 
 			if s.Pin != (lock.Entry{}) {
 				version = " @" + pinLabel(s.Pin)
+			}
+
+			if s.PinNote != "" {
+				version += " (latest: " + s.PinNote + ")"
 			}
 
 			if s.Mapped != "" {

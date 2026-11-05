@@ -22,7 +22,7 @@ type Options struct {
 	Sessions       bool
 	SessionPaths   map[string]string
 	ResolveSecret  func(string) (string, error)
-	// Upgrade raises every installed app older than the lock; UpgradeIDs only those listed.
+	// Upgrade raises every installed app older than on the source nodes; UpgradeIDs only those listed.
 	Upgrade    bool
 	UpgradeIDs []string
 }
@@ -45,7 +45,7 @@ type Report struct {
 	KeptLocal     []files.ApplyResult `json:"kept_local"`
 	ManualSecrets []string            `json:"fill_in_secrets"`
 	Notes         []string            `json:"notes"`
-	// Upgraded were raised to the lock version; Upgradable could be (rehome install --upgrade).
+	// Upgraded were raised to the source nodes' version; Upgradable could be (rehome install --upgrade).
 	Upgraded     []Outcome `json:"upgraded"`
 	Upgradable   []Outcome `json:"upgradable"`
 	VersionNotes []string  `json:"version_notes"`

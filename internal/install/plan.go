@@ -33,9 +33,11 @@ type Step struct {
 	Reason  string
 	// Pin is the exact version to install; empty means the latest.
 	Pin lock.Entry
-	// Installed is the version present now; Upgrade the newer one the lock offers.
+	// Installed is the version present now; Upgrade the newer one the source nodes have.
 	Installed string
 	Upgrade   lock.Entry
+	// PinNote says why the same version as the source node cannot be installed.
+	PinNote string
 	// Mapped says where an installer for this OS was found when the config had none.
 	Mapped string
 }
@@ -64,11 +66,11 @@ func (p *Plan) FilesRoot(group string) string {
 
 const (
 	ModeLatest = "latest"
-	ModeLocked = "locked"
+	ModeSame   = "same"
 )
 
 // Selection limits the plan to IDs (nil means every enabled app); All reinstalls what is present;
-// Mode picks lock versions or the latest; Latest lists apps that take the latest in locked mode.
+// Mode picks the source nodes' versions or the latest; Latest lists apps that take the latest in same mode.
 type Selection struct {
 	IDs    []string
 	All    bool

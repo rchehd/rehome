@@ -36,9 +36,14 @@ type Versioner interface {
 	Version(ctx context.Context, r *runner.Runner, s config.InstallSpec) (lock.Entry, error)
 }
 
-// Pinner installs the exact version (or commit) recorded in the lock.
+// Pinner installs the exact version (or commit) a node recorded.
 type Pinner interface {
 	InstallVersion(ctx context.Context, r *runner.Runner, s config.InstallSpec, e lock.Entry) error
+}
+
+// VersionChecker reports whether a Pinner's repository still offers a version.
+type VersionChecker interface {
+	HasVersion(ctx context.Context, r *runner.Runner, s config.InstallSpec, e lock.Entry) bool
 }
 
 func HasCmd(name string) bool {

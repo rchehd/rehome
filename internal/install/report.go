@@ -29,7 +29,7 @@ func (r *Report) Print(w io.Writer) {
 	}
 
 	if len(r.Upgradable) > 0 {
-		fmt.Fprintln(w, "older than the lock (rehome install --upgrade):")
+		fmt.Fprintln(w, "older than on the other nodes (rehome install --upgrade):")
 
 		for _, o := range r.Upgradable {
 			fmt.Fprintf(w, "  %s: %s\n", o.ID, o.Reason)

@@ -21,7 +21,7 @@ var statusLabels = map[string]string{
 type item struct {
 	step    install.Step
 	checked bool
-	// latest overrides a lock pin for this app; upgrade raises it to the lock version.
+	// latest overrides the source node's version for this app; upgrade raises it to that version.
 	latest  bool
 	upgrade bool
 }

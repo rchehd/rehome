@@ -25,7 +25,7 @@ func New(o app.Options, version string) *mcp.Server {
 	t := tools{o: o}
 
 	mcp.AddTool(s, &mcp.Tool{Name: "scan", Description: "Detect installed software and settings and compare with the config. Writes the config, settings files and lock only when write is true."}, t.scan)
-	mcp.AddTool(s, &mcp.Tool{Name: "status", Description: "Compare the config with this system: missing apps, new apps, changed settings, versions behind the lock."}, t.status)
+	mcp.AddTool(s, &mcp.Tool{Name: "status", Description: "Compare the config with this system: missing apps, new apps, changed settings, versions behind the other nodes."}, t.status)
 	mcp.AddTool(s, &mcp.Tool{Name: "attention", Description: "What scan could not handle by itself (too-large settings, unclaimed ~/.config folders, unknown binaries), each with the action to take."}, t.attention)
 	mcp.AddTool(s, &mcp.Tool{Name: "install_plan", Description: "What install would do (never installs). Returns the steps and run_as: the command a person runs in a terminal."}, t.installPlan)
 	mcp.AddTool(s, &mcp.Tool{Name: "add_install", Description: "Set how an app installs on a platform; creates the app if needed. The config is validated before it is written."}, t.addInstall)
@@ -94,7 +94,7 @@ func (t tools) attention(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}
 }
 
 type PlanArgs struct {
-	Versions string `json:"versions,omitempty" jsonschema:"latest or locked (default: locked when a lock exists)"`
+	Version string `json:"version,omitempty" jsonschema:"same (the versions the other nodes have) or latest (default)"`
 }
 
 func (t tools) installPlan(ctx context.Context, _ *mcp.CallToolRequest, a PlanArgs) (*mcp.CallToolResult, app.PlanReport, error) {
@@ -104,14 +104,14 @@ func (t tools) installPlan(ctx context.Context, _ *mcp.CallToolRequest, a PlanAr
 		return nil, app.PlanReport{}, err
 	}
 
-	mode := a.Versions
+	mode := a.Version
 
 	if mode == "" {
-		mode = app.DefaultMode(in.Lock)
+		mode = install.ModeLatest
 	}
 
-	if mode != install.ModeLatest && mode != install.ModeLocked {
-		return nil, app.PlanReport{}, fmt.Errorf("versions must be latest or locked")
+	if mode != install.ModeLatest && mode != install.ModeSame {
+		return nil, app.PlanReport{}, fmt.Errorf("version must be same or latest")
 	}
 
 	plan, err := app.BuildPlan(ctx, t.o, in, install.Selection{Mode: mode})

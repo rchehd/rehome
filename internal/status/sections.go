@@ -52,7 +52,7 @@ func (s *Status) Sections() []Section {
 	}
 	for _, id := range s.NotSynced {
 		v := s.Versions[id]
-		detail := []string{"rehome scan records this machine's version in rehome.lock; review, then rehome push for a linked repo."}
+		detail := []string{"rehome scan records this machine's version in its node; review, then rehome push for a linked repo."}
 		if v.Installed.Manager != v.Recorded.Manager && v.Recorded.Manager != "" {
 			detail = append(detail, "Install method changed: "+v.Recorded.Manager+" → "+v.Installed.Manager)
 		}

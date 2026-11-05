@@ -97,15 +97,6 @@ func BuildPlan(ctx context.Context, o Options, in *InstallInput, sel install.Sel
 	return plan, nil
 }
 
-// DefaultMode is the install mode without an explicit choice: the lock's versions if any.
-func DefaultMode(lk *lock.Lock) string {
-	if len(lk.Apps) > 0 {
-		return install.ModeLocked
-	}
-
-	return install.ModeLatest
-}
-
 // ConfigPath is the local config file commands edit: an explicit .yml path, else rehome.yml
 // in the config folder (the linked repo by default).
 func ConfigPath(o Options) (string, error) {
