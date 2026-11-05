@@ -58,6 +58,11 @@ func Parse(data []byte) (*Config, error) {
 	return &cfg, nil
 }
 
+// FilePath is rehome.yml in the config root.
+func FilePath(root string) string {
+	return filepath.Join(root, FileName)
+}
+
 func IsURL(source string) bool {
 	return strings.HasPrefix(source, "http://") || strings.HasPrefix(source, "https://")
 }

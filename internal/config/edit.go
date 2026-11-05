@@ -199,3 +199,34 @@ func ensureApp(root *yaml.Node, id, group string) *yaml.Node {
 
 	return node
 }
+
+// RenameIgnore moves a node's ignore list to its new name; a config without one is left alone.
+func RenameIgnore(path, from, to string) error {
+	data, err := os.ReadFile(path)
+
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+
+	if err != nil {
+		return err
+	}
+
+	cfg, err := Parse(data)
+
+	if err != nil || cfg.Ignore[from] == nil {
+		return err
+	}
+
+	return Edit(path, func(root *yaml.Node) error {
+		ignore := child(root, "ignore")
+
+		for i := 0; i+1 < len(ignore.Content); i += 2 {
+			if ignore.Content[i].Value == from {
+				ignore.Content[i].Value = to
+			}
+		}
+
+		return nil
+	})
+}
