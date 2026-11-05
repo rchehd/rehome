@@ -1,0 +1,101 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 840 470" width="840" height="470" role="img" aria-labelledby="t d">
+  <title id="t">rehome keeps every machine in sync</title>
+  <desc id="d">Desktop on Ubuntu, laptop on macOS and work PC on WSL each push their changes to one private config and sync from it. A new machine syncs from the config and takes secrets from Bitwarden. An AI agent edits the config over MCP.</desc>
+  <style>
+    :root {
+      --bg: #f8fafc; --text: #0f172a; --muted: #475569;
+      --fe-fill: #ecfeff; --fe-line: #0891b2;
+      --db-fill: #f3e8ff; --db-line: #7c3aed;
+      --sec-fill: #fff1f2; --sec-line: #e11d48;
+      --ext-fill: #f1f5f9; --ext-line: #64748b;
+      --push: #059669; --sync: #64748b; --secret: #e11d48; --mcp: #7c3aed;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0d1117; --text: #e6edf3; --muted: #8b949e;
+        --fe-fill: #082f3a; --fe-line: #22d3ee;
+        --db-fill: #241544; --db-line: #a78bfa;
+        --sec-fill: #3b0a1a; --sec-line: #fb7185;
+        --ext-fill: #161b22; --ext-line: #8b949e;
+        --push: #34d399; --sync: #8b949e; --secret: #fb7185; --mcp: #a78bfa;
+      }
+    }
+    text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; fill: var(--text); }
+    .label { font-size: 14px; font-weight: 600; text-anchor: middle; }
+    .sub { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11px; fill: var(--muted); text-anchor: middle; }
+    .note { font-size: 11px; fill: var(--muted); }
+    .bg { fill: var(--bg); }
+    .fe { fill: var(--fe-fill); stroke: var(--fe-line); stroke-width: 1.5; }
+    .db { fill: var(--db-fill); stroke: var(--db-line); stroke-width: 1.5; }
+    .sec { fill: var(--sec-fill); stroke: var(--sec-line); stroke-width: 1.5; }
+    .ext { fill: var(--ext-fill); stroke: var(--ext-line); stroke-width: 1.5; }
+    .edge { fill: none; stroke-width: 1.8; }
+    .push { stroke: var(--push); }
+    .sync { stroke: var(--sync); }
+    .secret { stroke: var(--secret); stroke-dasharray: 5 4; }
+    .mcp { stroke: var(--mcp); stroke-dasharray: 2 4; stroke-linecap: round; }
+    .head-push { fill: var(--push); } .head-sync { fill: var(--sync); }
+    .head-secret { fill: var(--secret); } .head-mcp { fill: var(--mcp); }
+    .t-push { fill: var(--push); } .t-sync { fill: var(--sync); }
+    .t-secret { fill: var(--secret); } .t-mcp { fill: var(--mcp); }
+  </style>
+  <defs>
+    <marker id="a-push" viewBox="0 0 8 8" refX="8" refY="4" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto"><path class="head-push" d="M0 0 8 4 0 8z"/></marker>
+    <marker id="a-sync" viewBox="0 0 8 8" refX="8" refY="4" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto"><path class="head-sync" d="M0 0 8 4 0 8z"/></marker>
+    <marker id="a-secret" viewBox="0 0 8 8" refX="8" refY="4" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto"><path class="head-secret" d="M0 0 8 4 0 8z"/></marker>
+    <marker id="a-mcp" viewBox="0 0 8 8" refX="8" refY="4" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto"><path class="head-mcp" d="M0 0 8 4 0 8z"/></marker>
+  </defs>
+
+  <rect class="bg" width="840" height="470" rx="12"/>
+
+  <!-- Linked machines push their changes and sync everyone else's -->
+  <path class="edge push" marker-end="url(#a-push)" d="M190 84C255 84 255 199 320 199"/>
+  <path class="edge sync" marker-end="url(#a-sync)" d="M320 211C255 211 255 96 190 96"/>
+  <path class="edge push" marker-end="url(#a-push)" d="M190 224H320"/>
+  <path class="edge sync" marker-end="url(#a-sync)" d="M320 236H190"/>
+  <path class="edge push" marker-end="url(#a-push)" d="M190 364C255 364 255 249 320 249"/>
+  <path class="edge sync" marker-end="url(#a-sync)" d="M320 261C255 261 255 376 190 376"/>
+  <text class="note t-push" x="255" y="217" text-anchor="middle">push</text>
+  <text class="note t-sync" x="255" y="252" text-anchor="middle">sync</text>
+
+  <path class="edge sync" marker-end="url(#a-sync)" d="M520 230H640"/>
+  <text class="note t-sync" x="580" y="222" text-anchor="middle">sync</text>
+  <path class="edge mcp" marker-end="url(#a-mcp)" d="M420 80V185"/>
+  <text class="note t-mcp" x="430" y="137">edits via MCP</text>
+  <path class="edge secret" marker-end="url(#a-secret)" d="M720 342V258"/>
+  <text class="note t-secret" x="730" y="304">secrets</text>
+
+  <rect class="fe" x="40" y="62" width="150" height="56" rx="8"/>
+  <text class="label" x="115" y="86">Desktop</text>
+  <text class="sub" x="115" y="104">Ubuntu</text>
+
+  <rect class="fe" x="40" y="202" width="150" height="56" rx="8"/>
+  <text class="label" x="115" y="226">Laptop</text>
+  <text class="sub" x="115" y="244">macOS</text>
+
+  <rect class="fe" x="40" y="342" width="150" height="56" rx="8"/>
+  <text class="label" x="115" y="366">Work PC</text>
+  <text class="sub" x="115" y="384">Debian on WSL</text>
+
+  <rect class="db" x="320" y="185" width="200" height="90" rx="10"/>
+  <text class="label" x="420" y="216">Private config</text>
+  <text class="sub" x="420" y="236">rehome.yml · files/ · lock</text>
+  <text class="sub" x="420" y="256">git, folder or file</text>
+
+  <rect class="ext" x="320" y="24" width="200" height="56" rx="8"/>
+  <text class="label" x="420" y="48">AI agent</text>
+  <text class="sub" x="420" y="66">Claude Code, Codex, Cursor</text>
+
+  <rect class="fe" x="640" y="202" width="160" height="56" rx="8"/>
+  <text class="label" x="720" y="226">New machine</text>
+  <text class="sub" x="720" y="244">any supported OS</text>
+
+  <rect class="sec" x="640" y="342" width="160" height="56" rx="8"/>
+  <text class="label" x="720" y="366">Bitwarden</text>
+  <text class="sub" x="720" y="384">tokens, SSH keys</text>
+
+  <!-- Legend -->
+  <path class="edge push" d="M40 440H66"/><text class="note" x="74" y="444">push: share this machine's changes</text>
+  <path class="edge sync" d="M290 440H316"/><text class="note" x="324" y="444">sync: pull and install what is missing</text>
+  <path class="edge secret" d="M560 440H586"/><text class="note" x="594" y="444">secrets, never in git</text>
+</svg>

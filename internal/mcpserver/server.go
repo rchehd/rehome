@@ -120,7 +120,7 @@ func (t tools) installPlan(ctx context.Context, _ *mcp.CallToolRequest, a PlanAr
 		return nil, app.PlanReport{}, err
 	}
 
-	return nil, app.PlanJSON(plan), nil
+	return nil, app.PlanJSON(plan, t.o), nil
 }
 
 type InstallArgs struct {

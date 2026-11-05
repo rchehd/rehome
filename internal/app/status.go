@@ -7,6 +7,7 @@ import (
 	"github.com/rchehd/rehome/internal/config"
 	"github.com/rchehd/rehome/internal/lock"
 	"github.com/rchehd/rehome/internal/platform"
+	"github.com/rchehd/rehome/internal/scan"
 	"github.com/rchehd/rehome/internal/status"
 )
 
@@ -53,5 +54,5 @@ func Status(ctx context.Context, o Options) (*status.Status, error) {
 		return nil, err
 	}
 
-	return status.Compute(ctx, o.Runner, cfg, existing, root, p, cat, repo, local, o.HarnessData)
+	return status.Compute(ctx, o.Runner, cfg, existing, root, p, cat, repo, local, scan.Options{HarnessData: o.HarnessData, Sessions: o.Sessions, SessionPaths: o.SessionPaths})
 }

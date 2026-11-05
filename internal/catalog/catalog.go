@@ -19,14 +19,15 @@ import (
 var data embed.FS
 
 type Entry struct {
-	HarnessOnly bool                          `yaml:"harness_only"`
-	ID          string                        `yaml:"id"`
-	Group       string                        `yaml:"group"`
-	Desktop     bool                          `yaml:"desktop"`
-	Install     map[string]config.InstallSpec `yaml:"install"`
-	Detect      Detect                        `yaml:"detect"`
-	Files       map[string]FileRule           `yaml:"files"`
-	Requires    []string                      `yaml:"requires"`
+	SessionFormat string                        `yaml:"session_format"`
+	HarnessOnly   bool                          `yaml:"harness_only"`
+	ID            string                        `yaml:"id"`
+	Group         string                        `yaml:"group"`
+	Desktop       bool                          `yaml:"desktop"`
+	Install       map[string]config.InstallSpec `yaml:"install"`
+	Detect        Detect                        `yaml:"detect"`
+	Files         map[string]FileRule           `yaml:"files"`
+	Requires      []string                      `yaml:"requires"`
 	// Skip lists platforms the app does not exist on (no installer to map to).
 	Skip        []string `yaml:"skip"`
 	PostInstall []string `yaml:"post_install"`

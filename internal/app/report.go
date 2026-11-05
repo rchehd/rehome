@@ -1,9 +1,14 @@
 package app
 
 import (
+	"encoding/csv"
+	"slices"
+	"strings"
+
 	"github.com/rchehd/rehome/internal/discover"
 	"github.com/rchehd/rehome/internal/install"
 	"github.com/rchehd/rehome/internal/lock"
+	"github.com/rchehd/rehome/internal/runner"
 	"github.com/rchehd/rehome/internal/secrets"
 )
 
@@ -84,8 +89,31 @@ type PlanReport struct {
 	RunAs string `json:"run_as"`
 }
 
-func PlanJSON(plan *install.Plan) PlanReport {
+func PlanJSON(plan *install.Plan, options Options) PlanReport {
 	r := PlanReport{Mode: plan.Mode, Commands: plan.Commands(), RunAs: "rehome install --yes --versions " + plan.Mode}
+	for _, flag := range []struct{ name, value string }{{"config", options.Config}, {"lock", options.Lock}} {
+		if flag.value != "" {
+			r.RunAs += " --" + flag.name + " " + runner.Quote(flag.value)
+		}
+	}
+	if options.HarnessData {
+		r.RunAs += " --harness-data"
+	}
+	if options.Sessions {
+		r.RunAs += " --sessions"
+	}
+	var paths []string
+	for from := range options.SessionPaths {
+		paths = append(paths, from)
+	}
+	slices.Sort(paths)
+	for _, from := range paths {
+		var field strings.Builder
+		writer := csv.NewWriter(&field)
+		_ = writer.Write([]string{from + "=" + options.SessionPaths[from]})
+		writer.Flush()
+		r.RunAs += " --session-path-map " + runner.Quote(strings.TrimSuffix(field.String(), "\n"))
+	}
 
 	for _, s := range plan.Steps {
 		name, pkg := s.Spec.Manager()
