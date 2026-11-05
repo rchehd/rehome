@@ -81,18 +81,21 @@ type PlanStep struct {
 	Reason    string `json:"reason,omitempty"`
 	PinNote   string `json:"pin_note,omitempty"`
 	Mapped    string `json:"auto_mapped,omitempty"`
+	From      string `json:"from,omitempty"`
 }
 
 type PlanReport struct {
-	Mode     string     `json:"mode"`
-	Steps    []PlanStep `json:"steps"`
-	Commands []string   `json:"commands_that_will_run"`
+	Mode  string     `json:"mode"`
+	Steps []PlanStep `json:"steps"`
+	// Skipped are apps the nodes have that this plan leaves out, with the reason.
+	Skipped  []install.Choice `json:"skipped"`
+	Commands []string         `json:"commands_that_will_run"`
 	// RunAs is what a person runs in a terminal to apply the plan (sudo needs them).
 	RunAs string `json:"run_as"`
 }
 
-func PlanJSON(plan *install.Plan, options Options) PlanReport {
-	r := PlanReport{Mode: plan.Mode, Commands: plan.Commands(), RunAs: "rehome install --yes --version " + plan.Mode}
+func PlanJSON(plan *install.Plan, options Options, req InstallRequest) PlanReport {
+	r := PlanReport{Mode: plan.Mode, Skipped: plan.Skipped, Commands: plan.Commands(), RunAs: "rehome install " + strings.Join(req.Args(), " ") + " --yes --version " + plan.Mode}
 	for _, flag := range []struct{ name, value string }{{"config", options.Config}} {
 		if flag.value != "" {
 			r.RunAs += " --" + flag.name + " " + runner.Quote(flag.value)
@@ -121,7 +124,7 @@ func PlanJSON(plan *install.Plan, options Options) PlanReport {
 		name, pkg := s.Spec.Manager()
 		r.Steps = append(r.Steps, PlanStep{
 			ID: s.App.ID, Status: s.Status, Manager: name, Package: pkg,
-			Pin: label(s.Pin), Installed: s.Installed, Upgrade: label(s.Upgrade), Reason: s.Reason, PinNote: s.PinNote, Mapped: s.Mapped,
+			Pin: label(s.Pin), Installed: s.Installed, Upgrade: label(s.Upgrade), Reason: s.Reason, PinNote: s.PinNote, Mapped: s.Mapped, From: plan.From[s.App.ID],
 		})
 	}
 

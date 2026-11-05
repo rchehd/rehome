@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
+	"slices"
+	"strings"
 
 	"github.com/rchehd/rehome/internal/config"
 	"github.com/rchehd/rehome/internal/install"
@@ -60,31 +62,104 @@ func LoadConfig(o Options) (*config.Config, string, error) {
 	return cfg, root, nil
 }
 
-// InstallInput is everything needed to build an install plan: settings come from the freshest
-// node with each group, versions from the live nodes.
+// InstallRequest is what install was asked for, with nodes named by name or id.
+type InstallRequest struct {
+	IDs          []string
+	From         string
+	Prefer       []string
+	IncludeStale bool
+	NoSettings   bool
+}
+
+// Args are the install arguments that repeat the request in a terminal.
+func (r InstallRequest) Args() []string {
+	args := slices.Clone(r.IDs)
+
+	if len(args) == 0 && r.From == "" {
+		args = []string{"--all"}
+	}
+
+	if r.From != "" {
+		args = append(args, "--from", runner.Quote(r.From))
+	}
+
+	if len(r.Prefer) > 0 {
+		args = append(args, "--prefer", runner.Quote(strings.Join(r.Prefer, ",")))
+	}
+
+	if r.IncludeStale {
+		args = append(args, "--include-stale")
+	}
+
+	if r.NoSettings {
+		args = append(args, "--no-settings")
+	}
+
+	return args
+}
+
+// InstallInput is everything needed to build an install plan: the apps picked from the nodes,
+// with their versions and settings.
 type InstallInput struct {
 	Config    *config.Config
 	Root      string
 	FileRoots map[string]string
 	Platform  platform.Platform
 	Lock      *lock.Lock
+	Pick      *install.Pick
 	Workspace *Workspace
 }
 
-func LoadInstall(o Options) (*InstallInput, error) {
+func LoadInstall(o Options, req InstallRequest) (*InstallInput, error) {
 	w, err := LoadWorkspace(o)
 
 	if err != nil {
 		return nil, err
 	}
 
-	cfg, roots := w.WithFiles(w.FreshestFiles)
+	nodes := w.Live()
 
-	return &InstallInput{Config: cfg, Root: w.Root, FileRoots: roots, Platform: w.Platform, Lock: node.Versions(w.Live()), Workspace: w}, nil
+	if req.IncludeStale {
+		nodes = w.All()
+	}
+
+	r := install.Request{IDs: req.IDs, NoSettings: req.NoSettings}
+
+	if req.From != "" {
+		if r.From = node.Find(w.All(), req.From); r.From == nil {
+			return nil, fmt.Errorf("unknown node %q (rehome nodes lists them)", req.From)
+		}
+	}
+
+	for _, ref := range req.Prefer {
+		n := node.Find(nodes, ref)
+
+		if n == nil {
+			return nil, fmt.Errorf("unknown or stale node %q in --prefer", ref)
+		}
+
+		r.Prefer = append(r.Prefer, n)
+	}
+
+	pick, err := install.Select(w.Config, nodes, w.Platform.Key(), w.Platform.FileKey(), r)
+
+	if err != nil {
+		return nil, err
+	}
+
+	cfg, roots := w.WithFiles(pick.Files)
+
+	return &InstallInput{Config: cfg, Root: w.Root, FileRoots: roots, Platform: w.Platform, Lock: pick.Lock, Pick: pick, Workspace: w}, nil
 }
 
+// BuildPlan plans the picked apps; sel.IDs narrows them further (a checklist choice).
 func BuildPlan(ctx context.Context, o Options, in *InstallInput, sel install.Selection) (*install.Plan, error) {
 	o.logf("checking what is installed …")
+
+	if sel.IDs == nil {
+		sel.IDs = append([]string{}, in.Pick.IDs...)
+	}
+
 	plan, err := install.Build(ctx, o.Runner, in.Config, in.Root, in.Platform, sel, in.Lock)
 
 	if err != nil {
@@ -92,6 +167,8 @@ func BuildPlan(ctx context.Context, o Options, in *InstallInput, sel install.Sel
 	}
 
 	plan.FileRoots = in.FileRoots
+	plan.From = in.Pick.From()
+	plan.Skipped = in.Pick.Skipped
 	plan.Recorded = in.Workspace.Record
 
 	return plan, nil

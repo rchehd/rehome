@@ -11,8 +11,8 @@ import (
 
 var menuItems = []tui.MenuItem{
 	{Key: "scan", Title: "Scan", Help: "detect software and settings, update the config"},
-	{Key: "install", Title: "Install", Help: "pick and install what is missing"},
-	{Key: "sync", Title: "Sync", Help: "pull and apply the config"},
+	{Key: "install", Title: "Install", Help: "pick apps your nodes have and install them here"},
+	{Key: "sync", Title: "Sync", Help: "pull, update installed apps' settings, scan and push"},
 	{Key: "status", Title: "Status", Help: "check the config source and this system"},
 	{Key: "pull", Title: "Pull", Help: "fetch the config from your repo"},
 	{Key: "push", Title: "Push", Help: "commit and push the config to your repo"},

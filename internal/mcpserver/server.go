@@ -94,11 +94,13 @@ func (t tools) attention(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}
 }
 
 type PlanArgs struct {
-	Version string `json:"version,omitempty" jsonschema:"same (the versions the other nodes have) or latest (default)"`
+	Apps    []string `json:"apps,omitempty" jsonschema:"app ids (default: every app the live nodes have)"`
+	From    string   `json:"from,omitempty" jsonschema:"take apps, versions and settings from this node only"`
+	Version string   `json:"version,omitempty" jsonschema:"same (the versions the other nodes have) or latest (default)"`
 }
 
 func (t tools) installPlan(ctx context.Context, _ *mcp.CallToolRequest, a PlanArgs) (*mcp.CallToolResult, app.PlanReport, error) {
-	in, err := app.LoadInstall(t.o)
+	in, err := app.LoadInstall(t.o, app.InstallRequest{IDs: a.Apps, From: a.From})
 
 	if err != nil {
 		return nil, app.PlanReport{}, err
@@ -120,7 +122,7 @@ func (t tools) installPlan(ctx context.Context, _ *mcp.CallToolRequest, a PlanAr
 		return nil, app.PlanReport{}, err
 	}
 
-	return nil, app.PlanJSON(plan, t.o), nil
+	return nil, app.PlanJSON(plan, t.o, app.InstallRequest{IDs: a.Apps, From: a.From}), nil
 }
 
 type InstallArgs struct {

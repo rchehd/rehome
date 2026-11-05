@@ -51,6 +51,11 @@ type Plan struct {
 	Platform  platform.Platform
 	Lock      *lock.Lock
 	Mode      string
+	// Reinstall and Offline repeat the selection, so a narrowed plan can be built again.
+	Reinstall, Offline bool
+	// From maps an app to the node it comes from; Skipped are apps the nodes have that cannot be planned.
+	From    map[string]string
+	Skipped []Choice
 	// Recorded receives the version of each app installed or found by the run.
 	Recorded func(id string, e lock.Entry)
 }
@@ -86,7 +91,7 @@ func Build(ctx context.Context, r *runner.Runner, cfg *config.Config, root strin
 		lk = lock.New()
 	}
 
-	plan := &Plan{Config: cfg, Root: root, Platform: p, Lock: lk, Mode: sel.Mode}
+	plan := &Plan{Config: cfg, Root: root, Platform: p, Lock: lk, Mode: sel.Mode, Reinstall: sel.All, Offline: sel.Offline}
 	res := newResolver(r, p, sel.Offline)
 
 	for _, app := range cfg.Apps {

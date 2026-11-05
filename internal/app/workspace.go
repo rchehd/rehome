@@ -122,11 +122,20 @@ func TouchNode(root, id string) error {
 	return n.Save()
 }
 
-// Live is the nodes that pushed recently enough to count.
+// All is every node, this machine's included even before its first scan.
+func (w *Workspace) All() []*node.Node {
+	if slices.Contains(w.Nodes, w.Self) {
+		return w.Nodes
+	}
+
+	return append(slices.Clone(w.Nodes), w.Self)
+}
+
+// Live is the nodes that pushed recently enough to count, this machine's included.
 func (w *Workspace) Live() []*node.Node {
 	now := time.Now()
 
-	return slices.DeleteFunc(slices.Clone(w.Nodes), func(n *node.Node) bool {
+	return slices.DeleteFunc(slices.Clone(w.All()), func(n *node.Node) bool {
 		return n != w.Self && n.Stale(now, w.Settings.StaleAfter())
 	})
 }
@@ -158,18 +167,6 @@ func (w *Workspace) WithFiles(pick func(group string) *node.Node) (*config.Confi
 // OwnFiles picks this machine's node for every group: what the last scan here recorded.
 func (w *Workspace) OwnFiles(string) *node.Node {
 	return w.Self
-}
-
-// FreshestFiles picks the most recently seen live node with the group, preferring this OS.
-func (w *Workspace) FreshestFiles(group string) *node.Node {
-	live := w.Live()
-	has := func(n *node.Node) bool { _, ok := n.Files[group]; return ok }
-
-	if n := node.Freshest(live, func(n *node.Node) bool { return has(n) && n.FileKey == w.Platform.FileKey() }); n != nil {
-		return n
-	}
-
-	return node.Freshest(live, has)
 }
 
 // SelfNode is this machine's node under root, new if it has none, without reading the config.

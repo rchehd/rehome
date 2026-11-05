@@ -28,25 +28,7 @@ func newPushCmd() *cobra.Command {
 				return err
 			}
 
-			findings, err := secrets.ScanDir(s.ClonePath)
-
-			if err != nil {
-				return err
-			}
-
-			if len(findings) > 0 {
-				for _, f := range findings {
-					cmd.PrintErrf("  %s line %d (%s)\n", f.Path, f.Line, f.Key)
-				}
-
-				return fmt.Errorf("refusing to push: %d secret-looking values in the config repo; replace them with %s", len(findings), secrets.Placeholder)
-			}
-
-			if message == "" {
-				message = fmt.Sprintf("rehome: update from %s at %s", s.NodeName, time.Now().Format(time.DateTime))
-			}
-
-			return publish(cmd, s, message)
+			return publishChecked(cmd, s, message)
 		},
 	}
 	cmd.Flags().StringVarP(&message, "message", "m", "", "commit message")
@@ -68,6 +50,29 @@ func newPullCmd() *cobra.Command {
 			return source.Open(s, flags.dryRun, cmd.ErrOrStderr()).Pull(cmd.Context())
 		},
 	}
+}
+
+// publishChecked refuses to publish secret-looking values, then publishes; an empty message gets a default.
+func publishChecked(cmd *cobra.Command, s config.Settings, message string) error {
+	findings, err := secrets.ScanDir(s.ClonePath)
+
+	if err != nil {
+		return err
+	}
+
+	if len(findings) > 0 {
+		for _, f := range findings {
+			cmd.PrintErrf("  %s line %d (%s)\n", f.Path, f.Line, f.Key)
+		}
+
+		return fmt.Errorf("refusing to push: %d secret-looking values in the config repo; replace them with %s", len(findings), secrets.Placeholder)
+	}
+
+	if message == "" {
+		message = fmt.Sprintf("rehome: update from %s at %s", s.NodeName, time.Now().Format(time.DateTime))
+	}
+
+	return publish(cmd, s, message)
 }
 
 // publish marks this machine's node as seen now and sends the config to its source.
