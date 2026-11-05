@@ -140,3 +140,23 @@ func TestForAppMacApplicationSupport(t *testing.T) {
 		t.Errorf("rule = %+v", rule)
 	}
 }
+
+func TestDesktopSessionWarningAndRuntimeOnlyDiscovery(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	for _, parent := range []string{".config/Claude", "Library/Application Support/Claude"} {
+		put(t, home, parent+"/claude-code-sessions/account/local_123.json", 100)
+		put(t, home, parent+"/Crashpad/client_id", 100)
+		put(t, home, parent+"/LOG", 100)
+	}
+	if rule, _ := ForApp("claude-desktop", []string{"claude"}, nil); rule != nil {
+		t.Fatalf("runtime-only folder produced capture rule: %+v", rule)
+	}
+	if warnings := DesktopSessions(); len(warnings) != 2 {
+		t.Fatalf("expected Linux and macOS Desktop warnings, got %+v", warnings)
+	}
+	put(t, home, ".config/Claude/settings.json", 100)
+	if rule, _ := ForApp("claude-desktop", []string{"claude"}, nil); rule == nil {
+		t.Fatal("ordinary settings were excluded")
+	}
+}

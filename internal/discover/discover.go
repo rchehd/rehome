@@ -21,21 +21,7 @@ type Warning struct {
 	Action string `json:"action"`
 }
 
-// Excludes keeps caches, logs, state, databases and VCS data out of auto rules.
-var Excludes = []string{
-	"**/cache/**", "**/Cache/**", "**/caches/**", "**/CachedData/**", "**/Code Cache/**", "**/GPUCache/**",
-	"**/DawnCache/**", "**/ShaderCache/**", "**/logs/**", "**/log/**", "**/Crash Reports/**", "**/crashes/**",
-	"**/IndexedDB/**", "**/Local Storage/**", "**/Session Storage/**", "**/Service Worker/**", "**/blob_storage/**",
-	"**/sessions/**", "**/history/**", "**/state/**", "**/tmp/**", "**/node_modules/**", "**/.git/**",
-	"**/*.log", "**/*.db", "**/*.db-*", "**/*.sqlite", "**/*.sqlite-*", "**/*.lock", "**/*.pid", "**/*.sock",
-	"**/Cookies*", "**/*history*",
-	// Package trees and indexes, not settings.
-	"**/vendor/**", "**/packages/**", "**/index/**", "**/*.cache", "**/storage/**",
-	// Electron runtime state.
-	"**/Partitions/**", "**/WebStorage/**", "**/Shared Dictionary/**", "**/databases/**", "**/Dictionaries/**",
-	"**/Network/**", "**/Local State", "**/Network Persistent State", "**/TransportSecurity", "**/Trust Tokens*",
-	"**/*.ldb", "**/Singleton*", "**/DIPS*", "**/Preferences~",
-}
+var Excludes = config.AutoExcludes()
 
 // Dot dirs that hold data, toolchains or credentials, never settings worth copying wholesale.
 var noisyDotDirs = map[string]bool{
@@ -131,7 +117,7 @@ func candidates(name string) []string {
 
 // HasSettings reports whether dir holds files an auto rule would take (not only caches).
 func HasSettings(dir string) bool {
-	_, count := measure(config.FileRule{Base: dir, Include: []string{"**"}, Exclude: Excludes})
+	_, count := measure(config.FileRule{Base: dir, Include: []string{"**"}, Origin: config.OriginAuto})
 
 	return count > 0
 }

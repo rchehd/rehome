@@ -21,6 +21,21 @@ To install a specific version, including a release candidate, pass a tag from th
 [releases page](https://github.com/rchehd/rehome/releases):
 `curl -fsSL https://raw.githubusercontent.com/rchehd/rehome/main/install.sh | REHOME_VERSION=<tag> sh`.
 
+After installation, update rehome itself with:
+
+```bash
+rehome update --check        # show whether a newer stable release exists
+rehome update                # download, verify and install it
+rehome version
+```
+
+If your installed binary does not recognize `update` (including 0.1.0), rerun the installer above once.
+Subsequent releases can use `rehome update`. `--dry-run` only checks, and `--json` returns structured results.
+The updater chooses Linux/macOS and amd64/arm64 automatically, verifies SHA-256 and the candidate's version,
+then atomically replaces the executable you launched. It preserves file permissions and symlinks. The executable's
+directory must be writable; rehome does not elevate privileges. Configs and captured settings are unaffected.
+An equal or newer installed version is kept. Development builds should install a release before using self-update.
+
 Binaries for Linux and macOS are on the [releases page](https://github.com/rchehd/rehome/releases). To build from source:
 
 ```bash
@@ -85,7 +100,32 @@ Any machine can update the config after you install a new tool, and the others a
 
 If scan lists a tool as an unknown binary, add an install method and enable it before sharing the config.
 `rehome status` reports the linked Git branch and the local system separately; with `--config` it compares the
-supplied config with the local system.
+supplied config with the local system. The default view shows a short table of counts and next steps, plus up to
+four version differences. Use `rehome status --interactive` to browse categories with search and scrolling.
+The Status item in the main menu opens the same browser.
+
+| Command | View |
+| --- | --- |
+| `rehome status` | Summary with counts and next steps |
+| `rehome status --interactive` | Categories, app search, versions and grouped file details |
+| `rehome status --details` | Every app and file in plain text |
+| `rehome status --json` | Complete data for scripts and agents, including installed and recorded versions |
+
+In the browser, Tab / Shift+Tab switches categories, ↑ / ↓ and Page Up / Page Down scroll, `/` searches the
+current category (including file paths), Enter opens an item's details, Esc goes back, and `q` quits. It is a
+read-only snapshot. `--interactive` requires a terminal and cannot be combined with `--details` or `--json`.
+
+Version columns are **ON MACHINE** and **IN CONFIG**. An older installed version offers `rehome install --upgrade`;
+a newer local version offers `rehome scan` to record it before publishing. Explicit pins are marked `(pin)`, Git
+installs show commits, and unreadable versions show `unknown`. `status` reads version data without changing the
+config; `scan` writes the versions it can read to `rehome.lock`.
+
+Missing-app details include the expected package manager or detection path. An APT zsh plugin and an Oh My Zsh
+clone are separate installs when the config expects different paths.
+
+To publish local tools and settings, run `rehome scan`, review the result, then `rehome push` for a linked repo.
+To apply the shared config on this machine, run `rehome sync`. For a file or folder, `rehome scan --config <path>`
+saves local changes. Share the updated folder yourself, then apply that copy with `rehome sync --config <path>`.
 
 ## What it picks up
 
@@ -100,7 +140,9 @@ supplied config with the local system.
 
 Settings of apps outside the catalog are found automatically in the usual places (`~/.config/<app>`, `~/.<app>`,
 `~/.<app>rc`, flatpak and snap config dirs), skipping caches, logs and databases. They are recorded under `capture`
-with `origin: auto`; edit or add your own rules there and the next scan follows them:
+with `origin: auto`. Current automatic exclusions also apply to rules saved by older releases, covering runtime
+state, Desktop session stores, logs, caches and credential files. Existing stored files are kept; review old captures
+before sharing them. To take control of a rule, remove `origin: auto` and select the paths explicitly. For example:
 
 ```yaml
 capture:
@@ -110,6 +152,9 @@ capture:
 
 Anything rehome cannot take by itself — a settings folder too large to copy whole, a `~/.config` folder no app claims,
 an unknown binary — is listed under **needs your attention** with what to do about it.
+
+If an APT system has neither an installer package snapshot nor a desktop/server metapackage, scan and status
+report that the baseline is limited. Additional system packages can appear as new; review them before publishing.
 
 Captured settings replace detected tokens, passwords and keys with `<rehome:redacted>`, and `rehome push` refuses to
 push a config that still contains secrets. To restore them, see [Secrets from Bitwarden](#secrets-from-bitwarden).
@@ -127,7 +172,8 @@ on the receiving machine. For a file or folder, use `rehome install --sessions -
 Combine `--sessions --harness-data` to include personal skills and subagents too.
 
 This carries Claude Code JSONL conversations, Codex active and archived rollouts (including Zstandard archives),
-and Cursor CLI and ACP stores.
+and Cursor CLI and ACP stores. Claude Desktop's `claude-code-sessions` store is unsupported, excluded from
+automatic settings capture even with `--sessions`, and reported under **needs your attention**.
 Snapshots keep session IDs and rebuild Cursor's blob references after secret redaction. Cursor snapshots retain
 their per-session encryption metadata. Import adds sessions and preserves existing destination histories.
 

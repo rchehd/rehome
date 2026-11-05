@@ -27,6 +27,10 @@ var baseMetas = []string{
 
 // Baseline returns the packages a fresh OS install already has.
 func Baseline(ctx context.Context, r *runner.Runner) (map[string]bool, error) {
+	return baseline(ctx, r, initialStatus)
+}
+
+func baseline(ctx context.Context, r *runner.Runner, snapshot string) (map[string]bool, error) {
 	base := map[string]bool{}
 	installed, err := installedPriorities(ctx, r)
 
@@ -60,7 +64,8 @@ func Baseline(ctx context.Context, r *runner.Runner) (map[string]bool, error) {
 		}
 	}
 
-	for _, pkg := range readInitialStatus() {
+	initial, _ := readInitialStatus(snapshot)
+	for _, pkg := range initial {
 		base[pkg] = true
 	}
 
@@ -161,11 +166,11 @@ func isRuntimeLib(pkg string) bool {
 		strings.HasPrefix(name, "steam-libs-")
 }
 
-func readInitialStatus() []string {
-	f, err := os.Open(initialStatus)
+func readInitialStatus(path string) ([]string, error) {
+	f, err := os.Open(path)
 
 	if err != nil {
-		return nil
+		return nil, err
 	}
 
 	defer f.Close()
@@ -173,8 +178,10 @@ func readInitialStatus() []string {
 	gz, err := gzip.NewReader(f)
 
 	if err != nil {
-		return nil
+		return nil, err
 	}
+
+	defer gz.Close()
 
 	var pkgs []string
 	sc := bufio.NewScanner(gz)
@@ -185,7 +192,10 @@ func readInitialStatus() []string {
 		}
 	}
 
-	return pkgs
+	if err := sc.Err(); err != nil {
+		return nil, err
+	}
+	return pkgs, nil
 }
 
 func hasBasePrefix(pkg string) bool {
@@ -196,4 +206,26 @@ func hasBasePrefix(pkg string) bool {
 	}
 
 	return false
+}
+
+func BaselineWarning(ctx context.Context, r *runner.Runner) string {
+	if initial, err := readInitialStatus(initialStatus); err == nil && len(initial) > 0 {
+		return ""
+	}
+	installed, err := installedPriorities(ctx, r)
+	if err != nil {
+		return ""
+	}
+	return baselineWarning(installed)
+}
+
+func baselineWarning(installed map[string]string) string {
+	for _, meta := range baseMetas {
+		if meta != "ubuntu-minimal" && meta != "ubuntu-standard" {
+			if _, ok := installed[meta]; ok {
+				return ""
+			}
+		}
+	}
+	return "installer package snapshot is unavailable and no desktop/server metapackage is installed; additional base-system packages may appear as new"
 }
