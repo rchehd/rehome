@@ -16,17 +16,18 @@ import (
 )
 
 const (
-	StatusCopied      = "copied"
-	StatusIdentical   = "identical"
-	StatusKeptLocal   = "kept-local"
-	StatusOverwritten = "overwritten"
-	StatusNoSource    = "missing-source"
-	StatusNoDest      = "no-destination"
-	StatusSecretSkip  = "secret-skipped"
-	StatusSecretError = "secret-error"
-	StatusDconfSkip   = "dconf-skipped"
-	StatusDconfError  = "dconf-error"
-	BackupSuffix      = ".rehome.bak"
+	StatusCopied       = "copied"
+	StatusIdentical    = "identical"
+	StatusKeptLocal    = "kept-local"
+	StatusOverwritten  = "overwritten"
+	StatusNoSource     = "missing-source"
+	StatusNoDest       = "no-destination"
+	StatusSecretSkip   = "secret-skipped"
+	StatusSecretError  = "secret-error"
+	StatusDconfSkip    = "dconf-skipped"
+	StatusDconfError   = "dconf-error"
+	StatusSessionError = "session-error"
+	BackupSuffix       = ".rehome.bak"
 )
 
 type ApplyResult struct {
@@ -46,6 +47,8 @@ type ApplyOptions struct {
 	FileKey       string
 	WSL           bool
 	HarnessData   bool
+	Sessions      bool
+	SessionPaths  map[string]string
 	Overwrite     bool
 	DryRun        bool
 	ResolveSecret func(string) (string, error)
@@ -57,6 +60,12 @@ func Apply(ctx context.Context, root string, maps []config.FileMap, opts ApplyOp
 	var results []ApplyResult
 
 	for _, m := range maps {
+		if m.Session != "" {
+			if opts.Sessions {
+				results = append(results, applySession(ctx, root, m, opts))
+			}
+			continue
+		}
 		if !opts.HarnessData && isHarnessData(m.Dest[opts.FileKey]) {
 			continue
 		}

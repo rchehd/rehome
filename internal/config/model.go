@@ -86,6 +86,7 @@ func (r AptRepo) AllKeyrings() []string {
 }
 
 type FileMap struct {
+	Session   string            `yaml:"session,omitempty"`
 	Src       string            `yaml:"src,omitempty"`
 	Dest      map[string]string `yaml:"dest,omitempty"`
 	Bitwarden string            `yaml:"bitwarden,omitempty"`

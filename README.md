@@ -1,23 +1,54 @@
 # rehome
 
-Move your whole workstation to a new machine.
+Keep your workstation in sync across every machine you use.
 
-`rehome` scans an already configured system — apps, CLI tools, shell setup, app settings, AI tooling — and
-generates a portable config. On a fresh machine, feed it the same config and it installs everything from scratch
-or fills in whatever is missing, picking the right package manager for the detected OS.
+`rehome` keeps one portable config of your setup — apps, CLI tools, shell, app settings, AI tooling — in a private
+repo. Every linked machine, whatever its OS, can push its changes there and pull everyone else's: install a tool on
+your laptop, and `rehome sync` brings it to your desktop with the right package manager. A fresh machine gets the
+whole setup in one `sync`. Secrets stay in Bitwarden.
 
-> Supports Ubuntu, Debian, macOS and Ubuntu/Debian on WSL. No release yet — build from source.
+![Linked machines on Ubuntu, macOS and WSL push to and sync from one private config; a new machine syncs from it](.github/assets/rehome-flow.svg)
+
+> Supports Ubuntu, Debian, macOS and Ubuntu/Debian on WSL.
 
 ## Install
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/rchehd/rehome/main/install.sh | sh
+```
+
+To install a specific version, including a release candidate, pass a tag from the
+[releases page](https://github.com/rchehd/rehome/releases):
+`curl -fsSL https://raw.githubusercontent.com/rchehd/rehome/main/install.sh | REHOME_VERSION=<tag> sh`.
+
+Binaries for Linux and macOS are on the [releases page](https://github.com/rchehd/rehome/releases). To build from source:
 
 ```bash
 git clone https://github.com/rchehd/rehome.git && cd rehome
 CGO_ENABLED=0 go build -o ~/.local/bin/rehome ./cmd/rehome
 ```
 
-Once releases are published: `curl -fsSL https://raw.githubusercontent.com/rchehd/rehome/main/install.sh | sh`.
+## Quick start
 
-## Usage
+On the machine you have already set up:
+
+```bash
+rehome link git@github.com:you/rehome-config.git   # an empty private repo
+rehome scan                                         # review what was found
+rehome push
+```
+
+On every other machine, new or already in use:
+
+```bash
+rehome link git@github.com:you/rehome-config.git
+rehome sync                                         # pull the config and install what is missing
+```
+
+After you change something on any machine, share it with `rehome pull && rehome scan && rehome push`; the others pick
+it up with `rehome sync`.
+
+## Commands
 
 ```bash
 rehome                      # interactive menu: Scan / Install / Sync / Status / Pull / Push
@@ -29,45 +60,32 @@ rehome link <git-url>       # keep the config in your own private repo
 rehome push / rehome pull   # sync it between machines
 ```
 
-Every command takes `--dry-run`. `install` takes `--yes` for non-interactive runs, `--all` to reinstall what is
-present, `--overwrite-files` to replace differing settings (a `.rehome.bak` is kept).
+Every command takes `--dry-run` and `--json`. `install` takes `--yes` for non-interactive runs, `--all` to reinstall
+what is present, `--overwrite-files` to replace differing settings (a `.rehome.bak` is kept).
 
-### Where the config lives
+## Where the config lives
 
 - a linked private git repo (`rehome link`) — the default once linked;
 - a folder with `rehome.yml` and `files/`: `--config ~/backup/rehome-config` (USB stick, archive, anything);
 - a single file: `--config ./rehome.yml` (settings come from `files/` next to it);
 - a URL: `--config https://…/rehome.yml` (app list only; you are warned it is not your repo).
 
-### Share a config across three machines
+See [examples/rehome.example.yml](examples/rehome.example.yml) for the format.
 
-Any machine can update the config after you install a new tool. The other machines can then apply the update.
+## Keep several machines in sync
 
-```mermaid
-flowchart TB
-    source["Config source (repo, file)"] <--> desktop["Desktop PC"]
-    source <--> laptop["Laptop"]
-    source <--> third["Third machine"]
-```
+Any machine can update the config after you install a new tool, and the others apply the update.
 
-- **With Git**, run `rehome link <git-url>` once on each machine. On whichever machine made the change,
-  run `rehome pull`, `rehome scan`, then `rehome push`. On any receiving machine, run `rehome status`
-  to check for updates and `rehome sync` to pull and apply them. For an empty repo, start with `scan` and `push`.
-- **With a file or folder**, start from the latest copy, run `rehome scan --config ./rehome-config` on the
-  machine with changes, then share the updated `rehome.yml`. Include the adjacent `files/` to transfer settings
-  and `rehome.lock` to transfer pinned versions. On a receiving machine, run
-  `rehome sync --config ./rehome-config/rehome.yml` to apply that copy. You can also pass the folder.
+- **With Git**, run `rehome link <git-url>` once on each machine. On the machine that changed, run `rehome pull`,
+  `rehome scan`, then `rehome push`. On the others, `rehome status` shows whether there is an update and
+  `rehome sync` pulls and applies it.
+- **With a file or folder**, start from the latest copy and run `rehome scan --config ./rehome-config` on the machine
+  with changes. Share the updated `rehome.yml` with the `files/` next to it (settings) and `rehome.lock` (versions).
+  On the receiving machine, run `rehome sync --config ./rehome-config` (the folder or its `rehome.yml`).
 
-If scan lists the tool as an unknown binary, add an install method and enable it before sharing the config.
-`rehome status` reports the linked Git branch and local system separately. With `--config`, it compares
-the supplied config with the local system.
-
-### Transfer AI skills and subagents
-
-Use `rehome scan --harness-data` to include personal skills and subagents from Claude Code, Codex, and Cursor,
-including shared skills under `~/.agents/skills`. Review the captured files before sharing the config.
-On the receiving machine, use `rehome sync --harness-data` or `rehome install --harness-data --config <path>`.
-The usual settings still transfer by default. Built-in skills, plugin caches, and chat sessions are outside this transfer.
+If scan lists a tool as an unknown binary, add an install method and enable it before sharing the config.
+`rehome status` reports the linked Git branch and the local system separately; with `--config` it compares the
+supplied config with the local system.
 
 ## What it picks up
 
@@ -76,7 +94,8 @@ The usual settings still transfer by default. Built-in skills, plugin caches, an
 - **Script installs** it knows from its catalog: Claude Code, Codex, oh-my-zsh and its plugins, uv, nvm, Go,
   JetBrains Toolbox, Zed, …
 - **Settings:** zsh, oh-my-zsh custom, fonts, git, gh, Sublime Text, JetBrains, kitty, Ghostty, Zed, Claude Code
-  and Codex (rules, hooks, MCP servers, plugins). Personal skills and subagents use `--harness-data`.
+  and Codex (rules, hooks, MCP servers, plugins), SSH config and `known_hosts`
+- **GNOME:** on Linux with `dconf-cli`, desktop, Shell, Mutter, keyboard shortcut and GNOME Terminal preferences
 - **Unknown binaries** are listed disabled, so nothing is lost; add an install method to enable them
 
 Settings of apps outside the catalog are found automatically in the usual places (`~/.config/<app>`, `~/.<app>`,
@@ -92,66 +111,43 @@ capture:
 Anything rehome cannot take by itself — a settings folder too large to copy whole, a `~/.config` folder no app claims,
 an unknown binary — is listed under **needs your attention** with what to do about it.
 
-On Linux with GNOME and `dconf-cli`, `scan` also saves a text snapshot of desktop, Shell, Mutter, keyboard
-shortcut and GNOME Terminal preferences. `install` restores those settings through `dconf-service` over D-Bus.
-If a saved setting conflicts with a local value, the snapshot is kept unapplied unless you pass
-`--overwrite-files`. That option saves a private backup and preserves settings outside the snapshot.
+Captured settings replace detected tokens, passwords and keys with `<rehome:redacted>`, and `rehome push` refuses to
+push a config that still contains secrets. To restore them, see [Secrets from Bitwarden](#secrets-from-bitwarden).
 
-Captured settings replace detected tokens, passwords and keys with `<rehome:redacted>`. Before pushing,
-`rehome push` checks the config for secrets.
+### Transfer AI skills and subagents
 
-### Restore a setting from Bitwarden
+Use `rehome scan --harness-data` to include personal skills and subagents from Claude Code, Codex, and Cursor,
+including shared skills under `~/.agents/skills`. Review the captured files before sharing the config.
+On the receiving machine, use `rehome sync --harness-data` or `rehome install --harness-data --config <path>`.
 
-In your trusted local config, add a `bitwarden` reference to the file's existing mapping:
+### Transfer local agent sessions
 
-```yaml
-files:
-  myapp:
-    - src: files/myapp/settings.env
-      dest: {linux: ~/.config/myapp/settings.env, macos: ~/.config/myapp/settings.env}
-      bitwarden: bw:12345678-1234-1234-1234-123456789abc/api_token
-```
+Use `rehome scan --sessions` on the source machine, share the config, then run `rehome sync --sessions`
+on the receiving machine. For a file or folder, use `rehome install --sessions --config <path>`.
+Combine `--sessions --harness-data` to include personal skills and subagents too.
 
-Put one `<rehome:redacted>` marker in the template, for example `API_TOKEN='<rehome:redacted>'`.
-The reference uses the item's UUID and either a custom field name or `login.password`. Inline values support
-letters, digits and `._~+/=@%:-`. Once you add the reference, edit the template in the config repo directly.
-Future scans leave it alone.
+This carries Claude Code JSONL conversations, Codex active and archived rollouts (including Zstandard archives),
+and Cursor CLI and ACP stores.
+Snapshots keep session IDs and rebuild Cursor's blob references after secret redaction. Cursor snapshots retain
+their per-session encryption metadata. Import adds sessions and preserves existing destination histories.
 
-With the Bitwarden CLI installed and logged in, run:
+Paths under the original home directory adapt to the receiving home directory. For a project in a different
+location, pass `--session-path-map /old/project=/new/project` when installing or syncing. Run the agent in the
+restored project and continue with `claude --resume <id>`, `codex resume <id>`, or `cursor-agent --resume <id>`.
 
-```sh
-BW_SESSION="$(bw unlock --raw)" rehome install --bitwarden
-```
+Session capture uses the catalog's rules and reports incomplete records, unresolved Cursor workspaces, and sessions
+above 128 MiB. For an older Cursor store without its workspace path, supply its original project path through
+`--session-path-map` during the scan as well. Review the snapshots before sharing them.
 
-The rendered file is written outside the config folder with permissions `0600`. To replace a differing local
-file, add `--overwrite-files`. Without `--bitwarden`, install skips these mappings and reports them.
+## How install behaves
 
-### Restore an SSH key from Bitwarden
+- Installs in dependency order; one failing app never stops the rest, and the report says why it failed.
+- Re-running is safe: present apps are skipped, local settings are never overwritten without asking.
+- Third-party apt repos are retargeted to the new release; repos that fail are disabled and reported.
+- GNOME settings are restored through `dconf-service` over D-Bus. A snapshot that conflicts with local values is kept
+  unapplied unless you pass `--overwrite-files`, which saves a private backup and keeps settings outside the snapshot.
 
-Use the UUID of a Bitwarden SSH Key item. The key mapping stores only a reference and a filename:
-
-```yaml
-apps:
-  - id: ssh
-    files: ssh
-files:
-  ssh:
-    - dest: {linux: ~/.ssh/id_work, macos: ~/.ssh/id_work}
-      bitwarden: bw:12345678-1234-1234-1234-123456789abc/sshKey/privateKey
-```
-
-Run the same `rehome install --bitwarden` command. It writes the private key with mode `0600` and creates
-`~/.ssh` with mode `0700` if needed. An existing key stays in place unless you pass `--overwrite-files`,
-which keeps a private backup. The SSH catalog captures `~/.ssh/config` and `known_hosts` as regular settings.
-
-## Using rehome on WSL
-
-WSL uses the same config as Ubuntu and Debian. rehome restores terminal tools and their settings and points
-you to Windows for catalogued graphical apps and fonts. For your own graphical apps, set `group: desktop`.
-GNOME desktop settings are skipped on WSL. Snap and Flatpak are available to the installer only when systemd
-is running. Scanning WSL does not mark intentionally skipped apps as missing in the shared config.
-
-## Moving between Linux and macOS
+## Linux, macOS and WSL
 
 A config made on Ubuntu installs on a Mac (and the other way round) without you looking up package names. When an
 app has no installer for the current OS, rehome finds one: the built-in catalog first, then the same name in Homebrew
@@ -159,43 +155,10 @@ or apt, then known renames (`fd-find` → `fd`), then [Repology](https://repolog
 auto-mapped, and the next `rehome scan` on that machine records them. Apps that do not exist on the other OS are listed
 with what to add; `--offline` keeps the lookup to the local package index. Homebrew is installed first if it is missing.
 
-## How install behaves
-
-- Installs in dependency order; one failing app never stops the rest, and the report says why it failed.
-- Re-running is safe: present apps are skipped, local settings are never overwritten without asking.
-- Third-party apt repos are retargeted to the new release; repos that fail are disabled and reported.
-
-## Changing the config from the command line
-
-```bash
-rehome config add-install hermes --platform any --script 'curl -fsSL https://…/install.sh | bash' --bin hermes
-rehome config add-capture myapp --base ~/.config/myapp --include '*.toml'
-rehome config set steam enabled=false skip=macos
-```
-
-Comments in `rehome.yml` are kept, and a change that would make the config invalid is refused.
-
-## Using with an AI agent
-
-At the end of an interactive `rehome install` or `rehome sync`, rehome offers to connect to detected AI agents
-that do not have it registered yet. Confirm the prompt to add the MCP server to their user settings.
-
-`rehome mcp` serves rehome to agents over MCP. Register it with every agent found on this machine
-(Claude Code, Codex, Cursor) in one go:
-
-```bash
-rehome mcp install
-```
-
-For any other MCP client, add a stdio server with command `rehome` and argument `mcp`:
-
-```json
-{ "mcpServers": { "rehome": { "command": "rehome", "args": ["mcp"] } } }
-```
-
-The agent can scan, read status and what needs your attention, and fix the config (`add_install`, `add_capture`,
-`set_app`). It never installs: installing needs `sudo` in your terminal, so the agent shows you the plan and the exact
-command to run. Every command also takes `--json` for scripts.
+WSL uses the same config as Ubuntu and Debian. rehome restores terminal tools and their settings and points you to
+Windows for catalogued graphical apps and fonts; for your own graphical apps, set `group: desktop`. GNOME settings are
+skipped on WSL, and Snap and Flatpak are used only when systemd is running. Scanning WSL does not mark intentionally
+skipped apps as missing in the shared config.
 
 ## Versions
 
@@ -215,6 +178,81 @@ apps:
 ignore:
   my-laptop: [docker, php8.1]
 ```
+
+## Secrets from Bitwarden
+
+Secrets never go into the config. Install reads them from the Bitwarden CLI instead; log in and run:
+
+```sh
+BW_SESSION="$(bw unlock --raw)" rehome install --bitwarden
+```
+
+Without `--bitwarden`, install skips the mappings below and reports them. A differing local file or an existing key
+is replaced only with `--overwrite-files`.
+
+### A setting
+
+In your trusted local config, add a `bitwarden` reference to the file's existing mapping:
+
+```yaml
+files:
+  myapp:
+    - src: files/myapp/settings.env
+      dest: {linux: ~/.config/myapp/settings.env, macos: ~/.config/myapp/settings.env}
+      bitwarden: bw:12345678-1234-1234-1234-123456789abc/api_token
+```
+
+Put one `<rehome:redacted>` marker in the template, for example `API_TOKEN='<rehome:redacted>'`.
+The reference uses the item's UUID and either a custom field name or `login.password`. Inline values support
+letters, digits and `._~+/=@%:-`. Once you add the reference, edit the template in the config repo directly;
+future scans leave it alone. The rendered file is written outside the config folder with permissions `0600`.
+
+### An SSH key
+
+Use the UUID of a Bitwarden SSH Key item. The mapping stores only a reference and a filename:
+
+```yaml
+apps:
+  - id: ssh
+    files: ssh
+files:
+  ssh:
+    - dest: {linux: ~/.ssh/id_work, macos: ~/.ssh/id_work}
+      bitwarden: bw:12345678-1234-1234-1234-123456789abc/sshKey/privateKey
+```
+
+The private key is written with mode `0600`, and `~/.ssh` is created with mode `0700` if needed. Replacing an
+existing key with `--overwrite-files` keeps a private backup.
+
+## Change the config from the command line
+
+```bash
+rehome config add-install hermes --platform any --script 'curl -fsSL https://…/install.sh | bash' --bin hermes
+rehome config add-capture myapp --base ~/.config/myapp --include '*.toml'
+rehome config set steam enabled=false skip=macos
+```
+
+Comments in `rehome.yml` are kept, and a change that would make the config invalid is refused.
+
+## Use it with an AI agent
+
+`rehome mcp` serves rehome to agents over MCP. At the end of an interactive `rehome install` or `rehome sync`, rehome
+offers to register it with detected AI agents that do not have it yet. To register it with every agent found on this
+machine (Claude Code, Codex, Cursor) at any time:
+
+```bash
+rehome mcp install
+```
+
+For any other MCP client, add a stdio server with command `rehome` and argument `mcp`:
+
+```json
+{ "mcpServers": { "rehome": { "command": "rehome", "args": ["mcp"] } } }
+```
+
+The agent can scan, read status and what needs your attention, and fix the config (`add_install`, `add_capture`,
+`set_app`). It never installs: installing needs `sudo` in your terminal, so the agent shows you the plan and the exact
+command to run.
 
 ## License
 

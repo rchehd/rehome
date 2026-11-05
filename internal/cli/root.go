@@ -16,12 +16,14 @@ import (
 var Version = "dev"
 
 type globalFlags struct {
-	config      string
-	lock        string
-	json        bool
-	dryRun      bool
-	verbose     bool
-	harnessData bool
+	config       string
+	lock         string
+	json         bool
+	dryRun       bool
+	verbose      bool
+	harnessData  bool
+	sessions     bool
+	sessionPaths map[string]string
 }
 
 var flags globalFlags
@@ -58,6 +60,8 @@ func newRoot() *cobra.Command {
 	pf.BoolVar(&flags.dryRun, "dry-run", false, "print what would be done without changing anything")
 	pf.BoolVarP(&flags.verbose, "verbose", "v", false, "print every command")
 	pf.BoolVar(&flags.harnessData, "harness-data", false, "include user skills and subagents in scan, status, install and sync")
+	pf.BoolVar(&flags.sessions, "sessions", false, "include local Claude Code, Codex and Cursor CLI sessions")
+	pf.StringToStringVar(&flags.sessionPaths, "session-path-map", nil, "map original project paths to new absolute paths (old=new)")
 
 	root.AddCommand(newVersionCmd(), newScanCmd(), newInstallCmd(), newSyncCmd(), newStatusCmd(), newConfigCmd(), newMCPCmd(), newLinkCmd(), newPushCmd(), newPullCmd(), newDebugCmd())
 
@@ -75,7 +79,7 @@ func newVersionCmd() *cobra.Command {
 }
 
 func opts(cmd *cobra.Command) app.Options {
-	return app.Options{Config: flags.config, Lock: flags.lock, Runner: newRunner(), Log: cmd.ErrOrStderr(), HarnessData: flags.harnessData}
+	return app.Options{Config: flags.config, Lock: flags.lock, Runner: newRunner(), Log: cmd.ErrOrStderr(), HarnessData: flags.harnessData, Sessions: flags.sessions, SessionPaths: flags.sessionPaths}
 }
 
 // report prints v as JSON under --json, otherwise the text.

@@ -10,7 +10,7 @@ check() { if eval "$2"; then pass "$1"; else fail "$1"; fi; }
 as_dev() { su - dev -c "$1"; }
 
 export DEBIAN_FRONTEND=noninteractive
-apt-get update -qq >/dev/null && apt-get install -y -qq sudo openssh-client dconf-cli dconf-service dbus >/dev/null
+apt-get update -qq >/dev/null && apt-get install -y -qq sudo openssh-client dconf-cli dconf-service dbus sqlite3 >/dev/null
 useradd -m -s /bin/bash dev
 echo "dev ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/dev
 cp -r /e2e/fixture /home/dev/cfg && cp /e2e/rehome /home/dev/rehome && chown -R dev /home/dev/cfg /home/dev/rehome
@@ -104,6 +104,13 @@ if as_dev "bash /e2e/harness.sh /home/dev/rehome"; then
   pass "harness opt-in capture, restore and local edits"
 else
   fail "harness opt-in capture, restore and local edits"
+fi
+
+echo "== sessions"
+if as_dev "bash /e2e/sessions.sh /home/dev/rehome"; then
+  pass "session opt-in capture, redaction, relocation and repeat import"
+else
+  fail "session opt-in capture, redaction, relocation and repeat import"
 fi
 
 echo "== $failures failure(s)"

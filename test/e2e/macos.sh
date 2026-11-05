@@ -56,5 +56,8 @@ check "scanned config is valid" 'grep -q " 0 errors" "$work/debug.log" || { cat 
 echo "== harness data"
 check "harness opt-in capture, restore and local edits" 'bash "$root/test/e2e/harness.sh" "$work/rehome"'
 
+echo "== sessions"
+check "session opt-in capture, redaction, relocation and repeat import" 'bash "$root/test/e2e/sessions.sh" "$work/rehome"'
+
 echo "== $failures failure(s)"
 [ "$failures" -eq 0 ]
