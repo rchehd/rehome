@@ -17,6 +17,9 @@ whole setup in one `sync`. Secrets stay in Bitwarden.
 curl -fsSL https://raw.githubusercontent.com/rchehd/rehome/main/install.sh | sh
 ```
 
+To install a specific version, including a release candidate, pass its tag:
+`curl -fsSL https://raw.githubusercontent.com/rchehd/rehome/main/install.sh | REHOME_VERSION=v0.1.0-rc.1 sh`.
+
 Binaries for Linux and macOS are on the [releases page](https://github.com/rchehd/rehome/releases). To build from source:
 
 ```bash
