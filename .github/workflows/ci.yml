@@ -20,6 +20,20 @@ jobs:
       - run: go test ./... -count=1
       - run: GOOS=darwin go build ./... && GOOS=darwin go vet ./...
 
+  self-update:
+    needs: build
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-15]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: go test ./internal/selfupdate -count=1 -v
+
   e2e:
     needs: build
     runs-on: ubuntu-latest

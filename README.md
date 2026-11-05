@@ -21,6 +21,21 @@ To install a specific version, including a release candidate, pass a tag from th
 [releases page](https://github.com/rchehd/rehome/releases):
 `curl -fsSL https://raw.githubusercontent.com/rchehd/rehome/main/install.sh | REHOME_VERSION=<tag> sh`.
 
+After installation, update rehome itself with:
+
+```bash
+rehome update --check        # show whether a newer stable release exists
+rehome update                # download, verify and install it
+rehome version
+```
+
+If your installed binary does not recognize `update` (including 0.1.0), rerun the installer above once.
+Subsequent releases can use `rehome update`. `--dry-run` only checks, and `--json` returns structured results.
+The updater chooses Linux/macOS and amd64/arm64 automatically, verifies SHA-256 and the candidate's version,
+then atomically replaces the executable you launched. It preserves file permissions and symlinks. The executable's
+directory must be writable; rehome does not elevate privileges. Configs and captured settings are unaffected.
+An equal or newer installed version is kept. Development builds should install a release before using self-update.
+
 Binaries for Linux and macOS are on the [releases page](https://github.com/rchehd/rehome/releases). To build from source:
 
 ```bash
