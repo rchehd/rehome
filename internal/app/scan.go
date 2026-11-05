@@ -71,7 +71,7 @@ func PrepareScan(ctx context.Context, o Options) (*ScanPlan, error) {
 	}
 
 	o.logf("scanning %s …", p)
-	res, err := scan.Run(ctx, o.Runner, p, cat, root, cfg, o.HarnessData)
+	res, err := scan.Run(ctx, o.Runner, p, cat, root, cfg, scan.Options{HarnessData: o.HarnessData, Sessions: o.Sessions, SessionPaths: o.SessionPaths})
 
 	if err != nil {
 		return nil, err

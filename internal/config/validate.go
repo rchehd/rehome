@@ -70,6 +70,9 @@ func (c *Config) Validate() []error {
 
 	for group, files := range c.Files {
 		for _, file := range files {
+			if file.Session != "" && (!slices.Contains([]string{"claude-code", "codex", "cursor"}, file.Session) || !strings.HasPrefix(path.Clean(file.Src), "files/") || len(file.Dest) > 0 || file.Dconf || file.Bitwarden != "" || file.Mode != "") {
+				errs = append(errs, fmt.Errorf("%s: session requires a supported format and a snapshot under files/", group))
+			}
 			if file.Dconf && (!strings.HasPrefix(path.Clean(file.Src), "files/") || len(file.Dest) > 0 || file.Bitwarden != "" || file.Mode != "") {
 				errs = append(errs, fmt.Errorf("%s: dconf requires a snapshot under files/ and cannot use dest, mode or bitwarden", group))
 			}

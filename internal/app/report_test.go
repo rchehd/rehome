@@ -15,7 +15,7 @@ func TestPlanJSON(t *testing.T) {
 		{App: config.App{ID: "cowsay"}, Spec: config.InstallSpec{Npm: "cowsay"}, Status: install.StatusInstall, Pin: lock.Entry{Version: "1.5.0"}},
 		{App: config.App{ID: "plugin"}, Spec: config.InstallSpec{Script: "git clone x y"}, Status: install.StatusInstalled, Upgrade: lock.Entry{Commit: "abc"}},
 	}}
-	data, err := json.Marshal(PlanJSON(plan))
+	data, err := json.Marshal(PlanJSON(plan, Options{}))
 
 	if err != nil {
 		t.Fatal(err)
@@ -38,6 +38,16 @@ func TestScanReportKeys(t *testing.T) {
 	for _, key := range []string{"config", "written", "apps", "unknown", "settings_files", "redacted_secrets", "needs_attention", "lock"} {
 		if !strings.Contains(string(data), `"`+key+`"`) {
 			t.Errorf("missing key %s in %s", key, data)
+		}
+	}
+}
+
+func TestPlanCommandKeepsSessionOptions(t *testing.T) {
+	plan := &install.Plan{Mode: install.ModeLocked}
+	result := PlanJSON(plan, Options{Config: "/config folder/rehome.yml", HarnessData: true, Sessions: true, SessionPaths: map[string]string{"/old project": "/new project", "/old,other": "/new,other"}})
+	for _, flag := range []string{"--config '/config folder/rehome.yml'", "--harness-data", "--sessions", "--session-path-map '/old project=/new project'", `--session-path-map '"/old,other=/new,other"'`} {
+		if !strings.Contains(result.RunAs, flag) {
+			t.Errorf("missing %s in %s", flag, result.RunAs)
 		}
 	}
 }

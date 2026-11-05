@@ -22,6 +22,7 @@ import (
 	"github.com/rchehd/rehome/internal/platform"
 	"github.com/rchehd/rehome/internal/runner"
 	"github.com/rchehd/rehome/internal/secrets"
+	"github.com/rchehd/rehome/internal/sessions"
 )
 
 type Result struct {
@@ -33,6 +34,12 @@ type Result struct {
 	SkipMissing map[string]bool
 	// Attention lists what scan could not take by itself, each with an action for the user.
 	Attention []discover.Warning
+}
+
+type Options struct {
+	HarnessData  bool
+	Sessions     bool
+	SessionPaths map[string]string
 }
 
 type scanner struct {
@@ -47,14 +54,17 @@ type scanner struct {
 	hints map[string][]string
 	// existing is the config already in root; its capture rules are honoured.
 	existing           *config.Config
-	harnessData        bool
+	options            Options
 	secretTemplates    map[string]bool
 	secretDestinations []os.FileInfo
 }
 
 // Run detects installed software and settings; nothing is written.
-func Run(ctx context.Context, r *runner.Runner, p platform.Platform, cat *catalog.Catalog, root string, existing *config.Config, harnessData bool) (*Result, error) {
-	s := &scanner{ctx: ctx, r: r, p: p, cat: cat, root: root, apps: map[string]*config.App{}, res: &Result{}, hints: map[string][]string{}, existing: existing, harnessData: harnessData}
+func Run(ctx context.Context, r *runner.Runner, p platform.Platform, cat *catalog.Catalog, root string, existing *config.Config, options Options) (*Result, error) {
+	if err := sessions.ValidatePaths(options.SessionPaths); err != nil {
+		return nil, err
+	}
+	s := &scanner{ctx: ctx, r: r, p: p, cat: cat, root: root, apps: map[string]*config.App{}, res: &Result{}, hints: map[string][]string{}, existing: existing, options: options}
 	s.protectSecretFiles()
 
 	if p.WSL {
@@ -82,7 +92,7 @@ func Run(ctx context.Context, r *runner.Runner, p platform.Platform, cat *catalo
 	known := map[string]bool{}
 
 	for _, e := range cat.Present(p.Key()) {
-		if e.HarnessOnly && !harnessData {
+		if e.HarnessOnly && !options.HarnessData {
 			continue
 		}
 
@@ -90,6 +100,15 @@ func Run(ctx context.Context, r *runner.Runner, p platform.Platform, cat *catalo
 
 		for _, b := range e.Detect.Bins {
 			known[b] = true
+		}
+	}
+	if options.Sessions {
+		for _, entry := range cat.Entries {
+			if entry.SessionFormat != "" {
+				if info, err := os.Stat(sessions.Root(entry.SessionFormat)); err == nil && info.IsDir() {
+					s.add(adapter.Detected{Manager: "script", Name: entry.ID})
+				}
+			}
 		}
 	}
 
@@ -275,7 +294,20 @@ func (s *scanner) captureFiles() error {
 		}
 
 		entry, _ := s.cat.Get(app.Files)
-		changes, fileMaps, err := files.CaptureRules(entry.ID, entry.Files, s.p.FileKey(), s.root, s.harnessData)
+		if entry.SessionFormat != "" {
+			changes, mappings, warnings := files.CaptureSessions(s.ctx, entry, s.p.FileKey(), s.root, s.options.SessionPaths)
+			for _, err := range warnings {
+				s.warn("%s: %v", id, err)
+			}
+			if len(mappings) == 0 {
+				delete(s.apps, id)
+				continue
+			}
+			s.res.Config.Files[app.Files] = mappings
+			s.addChanges(changes)
+			continue
+		}
+		changes, fileMaps, err := files.CaptureRules(entry.ID, entry.Files, s.p.FileKey(), s.root, s.options.HarnessData)
 
 		if err != nil {
 			s.warn("%s settings: %v", id, err)

@@ -8,6 +8,7 @@ import (
 
 	"github.com/rchehd/rehome/internal/catalog"
 	"github.com/rchehd/rehome/internal/config"
+	"github.com/rchehd/rehome/internal/files"
 	"github.com/rchehd/rehome/internal/gitsync"
 	"github.com/rchehd/rehome/internal/install"
 	"github.com/rchehd/rehome/internal/lock"
@@ -38,7 +39,7 @@ func (s *Status) Clean() bool {
 }
 
 // Compute compares the config with the system in both directions without writing anything.
-func Compute(ctx context.Context, r *runner.Runner, cfg *config.Config, existing []byte, root string, p platform.Platform, cat *catalog.Catalog, repo, local *lock.Lock, harnessData bool) (*Status, error) {
+func Compute(ctx context.Context, r *runner.Runner, cfg *config.Config, existing []byte, root string, p platform.Platform, cat *catalog.Catalog, repo, local *lock.Lock, options scan.Options) (*Status, error) {
 	plan, err := install.Build(ctx, r, cfg, root, p, install.Selection{Offline: true}, repo)
 
 	if err != nil {
@@ -58,7 +59,7 @@ func Compute(ctx context.Context, r *runner.Runner, cfg *config.Config, existing
 		}
 	}
 
-	res, err := scan.Run(ctx, r, p, cat, root, cfg, harnessData)
+	res, err := scan.Run(ctx, r, p, cat, root, cfg, options)
 
 	if err != nil {
 		return nil, err
@@ -81,6 +82,28 @@ func Compute(ctx context.Context, r *runner.Runner, cfg *config.Config, existing
 
 	for _, c := range res.FileChanges {
 		st.ChangedFiles = append(st.ChangedFiles, c.Dst)
+	}
+	if options.Sessions {
+		for _, mappings := range cfg.Files {
+			var sessionMaps []config.FileMap
+			for _, mapping := range mappings {
+				if mapping.Session != "" {
+					sessionMaps = append(sessionMaps, mapping)
+				}
+			}
+			results, err := files.Apply(ctx, root, sessionMaps, files.ApplyOptions{Sessions: true, DryRun: true, SessionPaths: options.SessionPaths})
+			if err != nil {
+				return nil, err
+			}
+			for _, result := range results {
+				switch result.Status {
+				case files.StatusCopied:
+					st.ChangedFiles = append(st.ChangedFiles, "session missing: "+result.Dest)
+				case files.StatusSessionError:
+					return nil, fmt.Errorf("%s: %s", result.Src, result.Problem)
+				}
+			}
+		}
 	}
 
 	return st, nil

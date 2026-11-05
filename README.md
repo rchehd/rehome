@@ -67,7 +67,25 @@ the supplied config with the local system.
 Use `rehome scan --harness-data` to include personal skills and subagents from Claude Code, Codex, and Cursor,
 including shared skills under `~/.agents/skills`. Review the captured files before sharing the config.
 On the receiving machine, use `rehome sync --harness-data` or `rehome install --harness-data --config <path>`.
-The usual settings still transfer by default. Built-in skills, plugin caches, and chat sessions are outside this transfer.
+
+### Transfer local agent sessions
+
+Use `rehome scan --sessions` on the source machine, share the config, then run `rehome sync --sessions`
+on the receiving machine. For a file or folder, use `rehome install --sessions --config <path>`.
+Combine `--sessions --harness-data` to include personal skills and subagents too.
+
+This carries Claude Code JSONL conversations, Codex active and archived rollouts (including Zstandard archives),
+and Cursor CLI and ACP stores.
+Snapshots keep session IDs and rebuild Cursor's blob references after secret redaction. Cursor snapshots retain
+their per-session encryption metadata. Import adds sessions and preserves existing destination histories.
+
+Paths under the original home directory adapt to the receiving home directory. For a project in a different
+location, pass `--session-path-map /old/project=/new/project` when installing or syncing. Run the agent in the
+restored project and continue with `claude --resume <id>`, `codex resume <id>`, or `cursor-agent --resume <id>`.
+
+Session capture uses the catalog's rules and reports incomplete records, unresolved Cursor workspaces, and sessions
+above 128 MiB. For an older Cursor store without its workspace path, supply its original project path through
+`--session-path-map` during the scan as well. Review the snapshots before sharing them.
 
 ## What it picks up
 

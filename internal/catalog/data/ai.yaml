@@ -51,6 +51,27 @@
       exclude: ["**/.git/**", "**/node_modules/**", "**/*.bak*"]
     macos: *sharedskills
 
+- id: claude-code-sessions
+  group: ai
+  session_format: claude-code
+  files:
+    linux: &claudesessions {base: ~/.claude, include: [projects/**/*.jsonl], max_size_mb: 128}
+    macos: *claudesessions
+
+- id: codex-sessions
+  group: ai
+  session_format: codex
+  files:
+    linux: &codexsessions {base: ~/.codex, include: [sessions/**/*.jsonl, sessions/**/*.jsonl.zst, archived_sessions/**/*.jsonl, archived_sessions/**/*.jsonl.zst], max_size_mb: 128}
+    macos: *codexsessions
+
+- id: cursor-sessions
+  group: ai
+  session_format: cursor
+  files:
+    linux: &cursorsessions {base: ~/.cursor, include: [chats/*/*/store.db, acp-sessions/*/store.db], max_size_mb: 128}
+    macos: *cursorsessions
+
 - id: rtk
   group: ai
   install:

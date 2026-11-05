@@ -14,6 +14,7 @@ import (
 	"github.com/rchehd/rehome/internal/install"
 	"github.com/rchehd/rehome/internal/lock"
 	"github.com/rchehd/rehome/internal/secrets"
+	"github.com/rchehd/rehome/internal/sessions"
 	"github.com/rchehd/rehome/internal/tui"
 )
 
@@ -38,6 +39,9 @@ func newApplyCmd(name, description string, sync bool) *cobra.Command {
 		Use:   name,
 		Short: description,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			if err := sessions.ValidatePaths(flags.sessionPaths); err != nil {
+				return err
+			}
 			if f.all && f.missing {
 				return errors.New("--all and --missing are mutually exclusive")
 			}
@@ -50,7 +54,7 @@ func newApplyCmd(name, description string, sync bool) *cobra.Command {
 				return errors.New("--versions must be latest or locked")
 			}
 
-			options := install.Options{OverwriteFiles: f.overwrite, Upgrade: f.upgrade, HarnessData: flags.harnessData}
+			options := install.Options{OverwriteFiles: f.overwrite, Upgrade: f.upgrade, HarnessData: flags.harnessData, Sessions: flags.sessions, SessionPaths: flags.sessionPaths}
 
 			if f.bitwarden {
 				if config.IsURL(flags.config) {
@@ -328,7 +332,7 @@ func pinLabel(e lock.Entry) string {
 // installJSON prints the plan for --dry-run, or runs it (--yes) and prints the report.
 func installJSON(cmd *cobra.Command, plan *install.Plan, options install.Options) error {
 	if flags.dryRun {
-		return report(cmd, app.PlanJSON(plan), "")
+		return report(cmd, app.PlanJSON(plan, opts(cmd)), "")
 	}
 
 	rep, err := executePlan(cmd, plan, options)

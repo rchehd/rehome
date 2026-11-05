@@ -19,9 +19,11 @@ type Options struct {
 	// Config is the --config value (path, folder or URL); empty uses the linked repo.
 	Config string
 	// Lock is the --lock value; empty means rehome.lock next to the config.
-	Lock        string
-	Runner      *runner.Runner
-	HarnessData bool
+	Lock         string
+	Runner       *runner.Runner
+	HarnessData  bool
+	Sessions     bool
+	SessionPaths map[string]string
 	// Log receives progress lines and warnings; nil discards them.
 	Log io.Writer
 }
