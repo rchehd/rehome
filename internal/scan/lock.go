@@ -17,7 +17,7 @@ func Versions(ctx context.Context, r *runner.Runner, cfg *config.Config, found m
 	entries := map[string]lock.Entry{}
 
 	for _, app := range cfg.Apps {
-		if cfg.Ignored(app, p.Key(), config.Hostname()) {
+		if cfg.Ignored(app, p.Key(), config.ThisNode()) {
 			continue
 		}
 

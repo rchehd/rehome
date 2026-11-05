@@ -159,7 +159,7 @@ func mergeApps(root *yaml.Node, scanned *Config, platformKey string, skipMissing
 	}
 
 	for _, a := range existing.Apps {
-		if found[a.ID] || a.MissingOnScan || skipMissing[a.ID] || !belongsTo(a, platformKey) || existing.Ignored(a, platformKey, Hostname()) {
+		if found[a.ID] || a.MissingOnScan || skipMissing[a.ID] || !belongsTo(a, platformKey) || existing.Ignored(a, platformKey, ThisNode()) {
 			continue
 		}
 

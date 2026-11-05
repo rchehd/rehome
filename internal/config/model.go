@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"slices"
+	"sync"
 )
 
 const (
@@ -20,7 +21,7 @@ type Config struct {
 	AptKeys []string `yaml:"apt_keys,omitempty"`
 	// Files is never stored in rehome.yml: it is filled from the nodes chosen for each group.
 	Files map[string][]FileMap `yaml:"files,omitempty"`
-	// Ignore lists app ids a given machine (by hostname) never installs.
+	// Ignore lists app ids a given node (by name) never installs.
 	Ignore map[string][]string `yaml:"ignore,omitempty"`
 	// Capture holds settings rules per app id and file key (linux, macos) beyond the catalog.
 	Capture map[string]map[string]FileRule `yaml:"capture,omitempty"`
@@ -141,17 +142,25 @@ func (s InstallSpec) managers() []managerField {
 	}
 }
 
-// Ignored reports whether the app is skipped on this platform or ignored on this machine.
-func (c *Config) Ignored(a App, platformKey, host string) bool {
-	return slices.Contains(a.Skip, platformKey) || slices.Contains(c.Ignore[host], a.ID)
+// Ignored reports whether the app is skipped on this platform or ignored on this node.
+func (c *Config) Ignored(a App, platformKey, node string) bool {
+	return slices.Contains(a.Skip, platformKey) || slices.Contains(c.Ignore[node], a.ID)
 }
 
-// Hostname identifies this machine for `ignore`.
 func Hostname() string {
 	h, _ := os.Hostname()
 
 	return h
 }
+
+// ThisNode is this machine's node name, the key of its `ignore` list.
+var ThisNode = sync.OnceValue(func() string {
+	if s, err := LoadSettings(); err == nil && s.NodeName != "" {
+		return s.NodeName
+	}
+
+	return NodeName(Hostname())
+})
 
 func (c *Config) App(id string) (*App, bool) {
 	for i := range c.Apps {

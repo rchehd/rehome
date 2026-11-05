@@ -94,7 +94,7 @@ func Build(ctx context.Context, r *runner.Runner, cfg *config.Config, root strin
 
 		step := resolveStep(ctx, r, app, p, sel, res)
 
-		if cfg.Ignored(app, p.Key(), config.Hostname()) {
+		if cfg.Ignored(app, p.Key(), config.ThisNode()) {
 			step.Status, step.Reason = StatusIgnored, "ignored on this machine or OS"
 		}
 
