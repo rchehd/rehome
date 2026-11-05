@@ -171,3 +171,14 @@ func (w *Workspace) FreshestFiles(group string) *node.Node {
 
 	return node.Freshest(live, has)
 }
+
+// SelfNode is this machine's node under root, new if it has none, without reading the config.
+func SelfNode(root string) (*node.Node, error) {
+	w, err := openWorkspace(&config.Config{}, root)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return w.Self, nil
+}

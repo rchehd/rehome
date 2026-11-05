@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/rchehd/rehome/internal/app"
+	"github.com/rchehd/rehome/internal/config"
 	"github.com/rchehd/rehome/internal/runner"
 )
 
@@ -63,7 +64,7 @@ func newRoot() *cobra.Command {
 	pf.BoolVar(&flags.sessions, "sessions", false, "include local Claude Code, Codex and Cursor CLI sessions")
 	pf.StringToStringVar(&flags.sessionPaths, "session-path-map", nil, "map original project paths to new absolute paths (old=new)")
 
-	root.AddCommand(newVersionCmd(), newUpdateCmd(), newScanCmd(), newInstallCmd(), newSyncCmd(), newStatusCmd(), newConfigCmd(), newMCPCmd(), newLinkCmd(), newNodesCmd(), newPushCmd(), newPullCmd(), newDebugCmd())
+	root.AddCommand(newVersionCmd(), newUpdateCmd(), newScanCmd(), newInstallCmd(), newSyncCmd(), newStatusCmd(), newConfigCmd(), newMCPCmd(), newLinkCmd(), newMigrateCmd(), newNodesCmd(), newPushCmd(), newPullCmd(), newDebugCmd())
 
 	return root
 }
@@ -102,7 +103,20 @@ func newRunner() *runner.Runner {
 
 // Execute runs the CLI and returns the process exit code.
 func Execute() int {
-	err := newRoot().Execute()
+	root := newRoot()
+	err := root.Execute()
+
+	if errors.Is(err, config.ErrNeedsMigration) && interactive() && !flags.json {
+		fmt.Fprintln(os.Stderr, "This config uses the previous format.")
+
+		if ask(root, "Migrate it now? [Y/n]", "y") == "y" {
+			if err = runMigrate(root); err == nil {
+				fmt.Fprintln(os.Stderr, "Done; run the command again.")
+
+				return 0
+			}
+		}
+	}
 
 	if err == nil {
 		return 0
