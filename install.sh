@@ -1,9 +1,11 @@
 #!/bin/sh
-# Installs the latest rehome release into ~/.local/bin: curl -fsSL <raw url>/install.sh | sh
+# Installs a rehome release into ~/.local/bin: curl -fsSL <raw url>/install.sh | sh
+# REHOME_VERSION=v0.1.0-rc.1 picks a tag, including a prerelease; the default is the latest stable release.
 set -eu
 
 repo="rchehd/rehome"
 dest="${REHOME_BIN_DIR:-$HOME/.local/bin}"
+version="${REHOME_VERSION:-}"
 
 case "$(uname -s)" in
   Linux) os=linux ;;
@@ -38,6 +40,10 @@ sha256() {
 
 archive="rehome_${os}_${arch}.tar.gz"
 base="https://github.com/$repo/releases/latest/download"
+
+if [ -n "$version" ]; then
+  base="https://github.com/$repo/releases/download/$version"
+fi
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 
