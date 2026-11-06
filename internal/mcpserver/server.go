@@ -79,8 +79,8 @@ func (t tools) status(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (
 }
 
 type AttentionReport struct {
-	Unknown   []string `json:"unknown_binaries"`
-	Attention any      `json:"needs_attention"`
+	Unknown   map[string]map[string]string `json:"unknown_binaries"`
+	Attention any                          `json:"needs_attention"`
 }
 
 func (t tools) attention(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, AttentionReport, error) {

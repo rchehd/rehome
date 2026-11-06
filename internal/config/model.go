@@ -46,12 +46,10 @@ type App struct {
 	Files       string                 `yaml:"files,omitempty"`
 	Requires    []string               `yaml:"requires,omitempty"`
 	PostInstall []string               `yaml:"post_install,omitempty"`
-	Detected    map[string]string      `yaml:"detected,omitempty"`
 	// Skip lists platform keys (debian, macos, …) where the app is not wanted.
 	Skip []string `yaml:"skip,omitempty"`
 	// Version pins the app permanently, whatever the install mode.
-	Version       string `yaml:"version,omitempty"`
-	MissingOnScan bool   `yaml:"missing_on_scan,omitempty"`
+	Version string `yaml:"version,omitempty"`
 }
 
 // InstallSpec names exactly one manager field; the rest are modifiers of it.

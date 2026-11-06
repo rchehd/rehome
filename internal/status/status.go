@@ -74,7 +74,7 @@ func Compute(ctx context.Context, r *runner.Runner, cfg *config.Config, existing
 		return nil, err
 	}
 
-	_, report, err := config.Merge(existing, res.Config, p.Key(), res.SkipMissing)
+	_, report, err := config.Merge(existing, res.Config, p.Key())
 
 	if err != nil {
 		return nil, err

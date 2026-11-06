@@ -13,21 +13,21 @@ import (
 )
 
 type ScanReport struct {
-	Config    string             `json:"config"`
-	Written   bool               `json:"written"`
-	Apps      AppsReport         `json:"apps"`
-	Unknown   []string           `json:"unknown"`
-	Files     FilesReport        `json:"settings_files"`
-	Secrets   []secrets.Finding  `json:"redacted_secrets"`
-	Attention []discover.Warning `json:"needs_attention"`
-	Warnings  []string           `json:"warnings"`
-	Node      NodeReport         `json:"node"`
+	Config    string                       `json:"config"`
+	Written   bool                         `json:"written"`
+	Apps      AppsReport                   `json:"apps"`
+	Unknown   map[string]map[string]string `json:"unknown"`
+	Files     FilesReport                  `json:"settings_files"`
+	Secrets   []secrets.Finding            `json:"redacted_secrets"`
+	Attention []discover.Warning           `json:"needs_attention"`
+	Warnings  []string                     `json:"warnings"`
+	Node      NodeReport                   `json:"node"`
 }
 
 type AppsReport struct {
-	Added         []string `json:"added"`
-	Updated       []string `json:"updated"`
-	Returned      []string `json:"returned"`
+	Added   []string `json:"added"`
+	Updated []string `json:"updated"`
+	// MissingOnScan are apps this node had at its last scan that this scan did not find.
 	MissingOnScan []string `json:"missing_on_scan"`
 	Unchanged     int      `json:"unchanged"`
 }
@@ -49,8 +49,8 @@ func (sp *ScanPlan) JSON(written bool) ScanReport {
 		Config:  sp.Root + "/rehome.yml",
 		Written: written,
 		Apps: AppsReport{
-			Added: sp.Report.Added, Updated: sp.Report.Updated, Returned: sp.Report.Returned,
-			MissingOnScan: sp.Report.MissingOnScan, Unchanged: len(sp.Report.Unchanged),
+			Added: sp.Report.Added, Updated: sp.Report.Updated,
+			MissingOnScan: sp.Node.Gone, Unchanged: len(sp.Report.Unchanged),
 		},
 		Unknown:   sp.Result.Unknown,
 		Secrets:   sp.Result.Findings,

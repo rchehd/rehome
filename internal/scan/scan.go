@@ -30,7 +30,8 @@ type Result struct {
 	Config      *config.Config
 	FileChanges []files.Change
 	Findings    []secrets.Finding
-	Unknown     []string
+	// Unknown are binaries no recipe or catalog entry knows, with where they were found.
+	Unknown     map[string]map[string]string
 	Warnings    []string
 	SkipMissing map[string]bool
 	// Attention lists what scan could not take by itself, each with an action for the user.
@@ -194,9 +195,20 @@ func (s *scanner) add(d adapter.Detected) {
 	}
 
 	if d.Manager == "unknown" && !ok {
-		disabled := false
-		app.ID, app.Group, app.Enabled, app.Detected = "unknown-"+appID(d), config.UnknownGroup, &disabled, d.Meta
-		s.res.Unknown = append(s.res.Unknown, app.ID)
+		id := "unknown-" + appID(d)
+
+		// Only a recipe the user wrote for it makes it an app; otherwise it is this node's note.
+		if _, known := s.existing.App(id); !known {
+			if s.res.Unknown == nil {
+				s.res.Unknown = map[string]map[string]string{}
+			}
+
+			s.res.Unknown[id] = d.Meta
+
+			return
+		}
+
+		app.ID, app.Group = id, config.UnknownGroup
 	}
 
 	spec, _ := app.Spec(s.p.Key())

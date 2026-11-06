@@ -32,6 +32,8 @@ type ScanPlan struct {
 type NodePlan struct {
 	Node    *node.Node
 	Changes []string
+	// Gone are apps the last scan here found that this one did not.
+	Gone []string
 }
 
 func PrepareScan(ctx context.Context, o Options) (*ScanPlan, error) {
@@ -79,7 +81,7 @@ func PrepareScan(ctx context.Context, o Options) (*ScanPlan, error) {
 
 	recipes := *res.Config
 	recipes.Files = nil
-	merged, report, err := config.Merge(existing, &recipes, w.Platform.Key(), res.SkipMissing)
+	merged, report, err := config.Merge(existing, &recipes, w.Platform.Key())
 
 	if err != nil {
 		return nil, err
@@ -149,6 +151,7 @@ func prepareNode(ctx context.Context, o Options, sp *ScanPlan, w *Workspace) (*N
 	next.Rehome = o.Version
 	next.Apps = current
 	next.Files = sp.Result.Config.Files
+	next.Unknown = sp.Result.Unknown
 	np := &NodePlan{Node: &next}
 
 	for _, id := range slices.Sorted(maps.Keys(found)) {
@@ -157,13 +160,14 @@ func prepareNode(ctx context.Context, o Options, sp *ScanPlan, w *Workspace) (*N
 		}
 	}
 
-	for id := range w.Self.Apps {
+	for _, id := range slices.Sorted(maps.Keys(w.Self.Apps)) {
 		if !found[id] {
 			np.Changes = append(np.Changes, id)
+			np.Gone = append(np.Gone, id)
 		}
 	}
 
-	if w.Self.LastSeen.IsZero() || !reflect.DeepEqual(w.Self.Files, next.Files) {
+	if w.Self.LastSeen.IsZero() || !reflect.DeepEqual(w.Self.Files, next.Files) || !reflect.DeepEqual(w.Self.Unknown, next.Unknown) {
 		np.Changes = append(np.Changes, "node "+next.Name)
 	}
 

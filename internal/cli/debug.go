@@ -235,14 +235,14 @@ func newDebugCmd() *cobra.Command {
 					return err
 				}
 
-				out, rep, err := config.Merge(existing, scanned, "debian", nil)
+				out, rep, err := config.Merge(existing, scanned, "debian")
 
 				if err != nil {
 					return err
 				}
 
 				cmd.Print(string(out))
-				cmd.PrintErrf("added=%v missing=%v returned=%v identical=%v\n", rep.Added, rep.MissingOnScan, rep.Returned, string(out) == string(existing))
+				cmd.PrintErrf("added=%v updated=%v identical=%v\n", rep.Added, rep.Updated, string(out) == string(existing))
 
 				return nil
 			},

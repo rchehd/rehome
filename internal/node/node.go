@@ -36,6 +36,8 @@ type Node struct {
 	// Apps are the installed apps with their versions, by app id.
 	Apps  map[string]lock.Entry       `yaml:"apps,omitempty"`
 	Files map[string][]config.FileMap `yaml:"files,omitempty"`
+	// Unknown are binaries found here that no recipe knows, with where they were found.
+	Unknown map[string]map[string]string `yaml:"unknown,omitempty"`
 	// Path is the node's directory, the root its files/ paths resolve against.
 	Path string `yaml:"-"`
 }

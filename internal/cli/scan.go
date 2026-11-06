@@ -1,7 +1,9 @@
 package cli
 
 import (
+	"maps"
 	"path/filepath"
+	"slices"
 
 	"github.com/spf13/cobra"
 
@@ -70,14 +72,14 @@ func printScanSummary(cmd *cobra.Command, sp *app.ScanPlan) {
 	r := sp.Result
 	cmd.Printf("config: %s\n", filepath.Join(sp.Root, config.FileName))
 	rep := sp.Report
-	cmd.Printf("apps: %d added, %d updated, %d returned, %d missing on scan, %d unchanged\n", len(rep.Added), len(rep.Updated), len(rep.Returned), len(rep.MissingOnScan), len(rep.Unchanged))
+	cmd.Printf("recipes: %d added, %d updated, %d unchanged\n", len(rep.Added), len(rep.Updated), len(rep.Unchanged))
 
-	if len(sp.Report.MissingOnScan) > 0 {
-		cmd.Printf("  missing on scan: %v\n", sp.Report.MissingOnScan)
+	if len(sp.Node.Gone) > 0 {
+		cmd.Printf("  gone from this node since the last scan: %v\n", sp.Node.Gone)
 	}
 
 	if len(r.Unknown) > 0 {
-		cmd.Printf("unknown (disabled, add an install method to enable): %v\n", r.Unknown)
+		cmd.Printf("unknown binaries, kept in this node (rehome config add-install <id> … makes a recipe): %v\n", slices.Sorted(maps.Keys(r.Unknown)))
 	}
 
 	newFiles, modified := 0, 0

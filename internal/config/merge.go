@@ -9,22 +9,18 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-const missingKey = "missing_on_scan"
-
 type MergeReport struct {
-	Added         []string
-	MissingOnScan []string
-	Returned      []string
-	Updated       []string
-	Unchanged     []string
+	Added     []string
+	Updated   []string
+	Unchanged []string
 }
 
 func (r MergeReport) Changed() bool {
-	return len(r.Added)+len(r.MissingOnScan)+len(r.Returned)+len(r.Updated) > 0
+	return len(r.Added)+len(r.Updated) > 0
 }
 
 // Merge folds a scan into the config without touching user edits; see mergeApps for the rules.
-func Merge(existing []byte, scanned *Config, platformKey string, skipMissing map[string]bool) ([]byte, MergeReport, error) {
+func Merge(existing []byte, scanned *Config, platformKey string) ([]byte, MergeReport, error) {
 	var report MergeReport
 
 	if len(bytes.TrimSpace(existing)) == 0 {
@@ -48,7 +44,7 @@ func Merge(existing []byte, scanned *Config, platformKey string, skipMissing map
 	}
 
 	root := doc.Content[0]
-	changed, err := mergeApps(root, scanned, platformKey, skipMissing, &report)
+	changed, err := mergeApps(root, scanned, platformKey, &report)
 
 	if err != nil {
 		return nil, report, err
@@ -104,7 +100,7 @@ func Marshal(cfg *Config) ([]byte, error) {
 	return encode(&yaml.Node{Kind: yaml.DocumentNode, Content: []*yaml.Node{&n}})
 }
 
-func mergeApps(root *yaml.Node, scanned *Config, platformKey string, skipMissing map[string]bool, report *MergeReport) (bool, error) {
+func mergeApps(root *yaml.Node, scanned *Config, platformKey string, report *MergeReport) (bool, error) {
 	seq := child(root, "apps")
 
 	if seq == nil {
@@ -112,17 +108,9 @@ func mergeApps(root *yaml.Node, scanned *Config, platformKey string, skipMissing
 		setChild(root, "apps", seq)
 	}
 
-	var existing Config
-
-	if err := root.Decode(&existing); err != nil {
-		return false, err
-	}
-
-	found := map[string]bool{}
 	changed := false
 
 	for _, a := range scanned.Apps {
-		found[a.ID] = true
 		node := appNode(seq, a.ID)
 
 		if node == nil {
@@ -139,33 +127,19 @@ func mergeApps(root *yaml.Node, scanned *Config, platformKey string, skipMissing
 			continue
 		}
 
-		returned := removeChild(node, missingKey)
 		updated, err := addMissingFields(node, a, platformKey)
 
 		if err != nil {
 			return false, err
 		}
 
-		switch {
-		case returned:
-			report.Returned = append(report.Returned, a.ID)
-		case updated:
+		if updated {
 			report.Updated = append(report.Updated, a.ID)
-		default:
+		} else {
 			report.Unchanged = append(report.Unchanged, a.ID)
 		}
 
-		changed = changed || returned || updated
-	}
-
-	for _, a := range existing.Apps {
-		if found[a.ID] || a.MissingOnScan || skipMissing[a.ID] || !belongsTo(a, platformKey) || existing.Ignored(a, platformKey, ThisNode()) {
-			continue
-		}
-
-		setChild(appNode(seq, a.ID), missingKey, &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!bool", Value: "true"})
-		report.MissingOnScan = append(report.MissingOnScan, a.ID)
-		changed = true
+		changed = changed || updated
 	}
 
 	return changed, nil
@@ -208,17 +182,6 @@ func addMissingFields(node *yaml.Node, a App, platformKey string) (bool, error) 
 	setChild(install, platformKey, &v)
 
 	return true, nil
-}
-
-// belongsTo reports whether a scan on this platform is expected to find the app.
-func belongsTo(a App, platformKey string) bool {
-	if len(a.Install) == 0 {
-		return len(a.Detected) > 0
-	}
-
-	_, ok := a.Spec(platformKey)
-
-	return ok
 }
 
 func mergeMap[V any](root *yaml.Node, key string, scanned map[string]V) (bool, error) {

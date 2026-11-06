@@ -78,7 +78,6 @@ func AddInstall(path, id, platformKey string, spec InstallSpec, group string) er
 
 		v.Style = yaml.FlowStyle
 		setChild(install, platformKey, &v)
-		removeChild(app, missingKey)
 
 		return nil
 	})

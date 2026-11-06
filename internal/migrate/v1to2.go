@@ -58,6 +58,10 @@ func v1to2(root string, self *node.Node, dry bool) ([]string, error) {
 		}
 	}
 
+	if moved := nodeState(top, self); moved > 0 {
+		actions = append(actions, fmt.Sprintf("move %d unknown binaries from rehome.yml into %s", moved, rel(root, self.Path, node.FileName)))
+	}
+
 	if v := value(top, "version"); v != nil {
 		v.Value = "2"
 	} else {
@@ -142,6 +146,46 @@ func v1to2(root string, self *node.Node, dry bool) ([]string, error) {
 	self.LastSeen = time.Now().UTC().Truncate(time.Second)
 
 	return actions, self.Save()
+}
+
+// nodeState strips what v1 kept per machine in the recipes: missing_on_scan flags, and unknown
+// binaries (disabled apps with only detected:), which move to the node.
+func nodeState(top *yaml.Node, self *node.Node) int {
+	apps := value(top, "apps")
+
+	if apps == nil {
+		return 0
+	}
+
+	moved := 0
+	kept := apps.Content[:0]
+
+	for _, app := range apps.Content {
+		take(app, "missing_on_scan")
+		detected := take(app, "detected")
+		id := value(app, "id")
+
+		if detected != nil && id != nil && value(app, "install") == nil {
+			meta := map[string]string{}
+
+			if err := detected.Decode(&meta); err == nil {
+				if self.Unknown == nil {
+					self.Unknown = map[string]map[string]string{}
+				}
+
+				self.Unknown[id.Value] = meta
+				moved++
+
+				continue
+			}
+		}
+
+		kept = append(kept, app)
+	}
+
+	apps.Content = kept
+
+	return moved
 }
 
 // take removes key from the mapping and returns its value.
