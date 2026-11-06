@@ -25,7 +25,7 @@ func New(o app.Options, version string) *mcp.Server {
 	t := tools{o: o}
 
 	mcp.AddTool(s, &mcp.Tool{Name: "scan", Description: "Detect installed software and settings and compare with the config. Writes the config, settings files and lock only when write is true."}, t.scan)
-	mcp.AddTool(s, &mcp.Tool{Name: "status", Description: "Compare the config with this system: missing apps, new apps, changed settings, versions behind the lock."}, t.status)
+	mcp.AddTool(s, &mcp.Tool{Name: "status", Description: "Compare the config with this system: missing apps, new apps, changed settings, versions behind the other nodes."}, t.status)
 	mcp.AddTool(s, &mcp.Tool{Name: "attention", Description: "What scan could not handle by itself (too-large settings, unclaimed ~/.config folders, unknown binaries), each with the action to take."}, t.attention)
 	mcp.AddTool(s, &mcp.Tool{Name: "install_plan", Description: "What install would do (never installs). Returns the steps and run_as: the command a person runs in a terminal."}, t.installPlan)
 	mcp.AddTool(s, &mcp.Tool{Name: "add_install", Description: "Set how an app installs on a platform; creates the app if needed. The config is validated before it is written."}, t.addInstall)
@@ -79,8 +79,8 @@ func (t tools) status(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (
 }
 
 type AttentionReport struct {
-	Unknown   []string `json:"unknown_binaries"`
-	Attention any      `json:"needs_attention"`
+	Unknown   map[string]map[string]string `json:"unknown_binaries"`
+	Attention any                          `json:"needs_attention"`
 }
 
 func (t tools) attention(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, AttentionReport, error) {
@@ -94,24 +94,26 @@ func (t tools) attention(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}
 }
 
 type PlanArgs struct {
-	Versions string `json:"versions,omitempty" jsonschema:"latest or locked (default: locked when a lock exists)"`
+	Apps    []string `json:"apps,omitempty" jsonschema:"app ids (default: every app the live nodes have)"`
+	From    string   `json:"from,omitempty" jsonschema:"take apps, versions and settings from this node only"`
+	Version string   `json:"version,omitempty" jsonschema:"same (the versions the other nodes have) or latest (default)"`
 }
 
 func (t tools) installPlan(ctx context.Context, _ *mcp.CallToolRequest, a PlanArgs) (*mcp.CallToolResult, app.PlanReport, error) {
-	in, err := app.LoadInstall(t.o)
+	in, err := app.LoadInstall(t.o, app.InstallRequest{IDs: a.Apps, From: a.From})
 
 	if err != nil {
 		return nil, app.PlanReport{}, err
 	}
 
-	mode := a.Versions
+	mode := a.Version
 
 	if mode == "" {
-		mode = app.DefaultMode(in.Lock)
+		mode = install.ModeLatest
 	}
 
-	if mode != install.ModeLatest && mode != install.ModeLocked {
-		return nil, app.PlanReport{}, fmt.Errorf("versions must be latest or locked")
+	if mode != install.ModeLatest && mode != install.ModeSame {
+		return nil, app.PlanReport{}, fmt.Errorf("version must be same or latest")
 	}
 
 	plan, err := app.BuildPlan(ctx, t.o, in, install.Selection{Mode: mode})
@@ -120,13 +122,13 @@ func (t tools) installPlan(ctx context.Context, _ *mcp.CallToolRequest, a PlanAr
 		return nil, app.PlanReport{}, err
 	}
 
-	return nil, app.PlanJSON(plan, t.o), nil
+	return nil, app.PlanJSON(plan, t.o, app.InstallRequest{IDs: a.Apps, From: a.From}), nil
 }
 
 type InstallArgs struct {
 	App      string `json:"app" jsonschema:"app id"`
 	Platform string `json:"platform,omitempty" jsonschema:"debian, macos, fedora, arch or any (default: this machine)"`
-	Manager  string `json:"manager" jsonschema:"apt, snap, flatpak, npm, pipx, uv_tool, cargo, go or script"`
+	Manager  string `json:"manager" jsonschema:"apt, snap, flatpak, brew, cask, npm, pipx, uv_tool, cargo, go or script"`
 	Package  string `json:"package" jsonschema:"package name, or the install command for script"`
 	Bin      string `json:"bin,omitempty" jsonschema:"binary name or path that proves the install (needed for script)"`
 	Repo     string `json:"repo,omitempty" jsonschema:"apt repo name from apt_repos"`
@@ -161,20 +163,10 @@ func (t tools) addInstall(_ context.Context, _ *mcp.CallToolRequest, a InstallAr
 }
 
 func specFor(a InstallArgs) (config.InstallSpec, error) {
-	s := config.InstallSpec{Repo: a.Repo, Classic: a.Classic, Bin: a.Bin}
-	fields := map[string]*string{
-		"apt": &s.Apt, "snap": &s.Snap, "flatpak": &s.Flatpak, "npm": &s.Npm, "pipx": &s.Pipx,
-		"uv_tool": &s.UvTool, "cargo": &s.Cargo, "go": &s.GoPkg, "script": &s.Script,
-	}
-	field, ok := fields[a.Manager]
+	s, err := config.NewSpec(a.Manager, a.Package)
+	s.Repo, s.Classic, s.Bin = a.Repo, a.Classic, a.Bin
 
-	if !ok {
-		return s, fmt.Errorf("unknown manager %q", a.Manager)
-	}
-
-	*field = a.Package
-
-	return s, nil
+	return s, err
 }
 
 type CaptureArgs struct {

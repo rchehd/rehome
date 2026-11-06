@@ -31,31 +31,55 @@ type Step struct {
 	Adapter adapter.Adapter
 	Status  string
 	Reason  string
+	// Code is the reason code of an unavailable step (ReasonNoRecipe, …).
+	Code string
 	// Pin is the exact version to install; empty means the latest.
 	Pin lock.Entry
-	// Installed is the version present now; Upgrade the newer one the lock offers.
+	// Installed is the version present now; Upgrade the newer one the source nodes have.
 	Installed string
 	Upgrade   lock.Entry
+	// PinNote says why the same version as the source node cannot be installed.
+	PinNote string
 	// Mapped says where an installer for this OS was found when the config had none.
 	Mapped string
 }
 
 type Plan struct {
-	Steps    []Step
-	Config   *config.Config
-	Root     string
-	Platform platform.Platform
-	Lock     *lock.Lock
-	Mode     string
+	Steps  []Step
+	Config *config.Config
+	// Root holds rehome.yml and the shared apt files; FileRoots maps a settings group to its node folder.
+	Root      string
+	FileRoots map[string]string
+	Platform  platform.Platform
+	Lock      *lock.Lock
+	Mode      string
+	// Reinstall and Offline repeat the selection, so a narrowed plan can be built again.
+	Reinstall, Offline bool
+	// From maps an app to the node it comes from; Skipped are apps the nodes have that cannot be planned.
+	From    map[string]string
+	Skipped []Choice
+	// Conflicts are apps several nodes have with different versions or settings, mapped to those nodes.
+	Conflicts map[string][]string
+	// Recorded receives the version of each app installed or found by the run.
+	Recorded func(id string, e lock.Entry)
+}
+
+// FilesRoot is the folder a settings group's files/ paths resolve against.
+func (p *Plan) FilesRoot(group string) string {
+	if root, ok := p.FileRoots[group]; ok {
+		return root
+	}
+
+	return p.Root
 }
 
 const (
 	ModeLatest = "latest"
-	ModeLocked = "locked"
+	ModeSame   = "same"
 )
 
 // Selection limits the plan to IDs (nil means every enabled app); All reinstalls what is present;
-// Mode picks lock versions or the latest; Latest lists apps that take the latest in locked mode.
+// Mode picks the source nodes' versions or the latest; Latest lists apps that take the latest in same mode.
 type Selection struct {
 	IDs    []string
 	All    bool
@@ -63,6 +87,8 @@ type Selection struct {
 	Latest []string
 	// Offline skips network lookups (Homebrew API, Repology) when mapping installers.
 	Offline bool
+	// NoSettings are apps installed without their settings files.
+	NoSettings []string
 }
 
 // Build resolves every app to a step in dependency order.
@@ -71,7 +97,7 @@ func Build(ctx context.Context, r *runner.Runner, cfg *config.Config, root strin
 		lk = lock.New()
 	}
 
-	plan := &Plan{Config: cfg, Root: root, Platform: p, Lock: lk, Mode: sel.Mode}
+	plan := &Plan{Config: cfg, Root: root, Platform: p, Lock: lk, Mode: sel.Mode, Reinstall: sel.All, Offline: sel.Offline}
 	res := newResolver(r, p, sel.Offline)
 
 	for _, app := range cfg.Apps {
@@ -79,9 +105,13 @@ func Build(ctx context.Context, r *runner.Runner, cfg *config.Config, root strin
 			continue
 		}
 
-		step := resolveStep(ctx, r, app, p, sel, res)
+		if slices.Contains(sel.NoSettings, app.ID) {
+			app.Files = ""
+		}
 
-		if cfg.Ignored(app, p.Key(), config.Hostname()) {
+		step := resolveStep(ctx, r, cfg, app, p, sel, res)
+
+		if cfg.Ignored(app, p.Key(), config.ThisNode()) {
 			step.Status, step.Reason = StatusIgnored, "ignored on this machine or OS"
 		}
 
@@ -99,7 +129,7 @@ func Build(ctx context.Context, r *runner.Runner, cfg *config.Config, root strin
 	return plan, nil
 }
 
-func resolveStep(ctx context.Context, r *runner.Runner, app config.App, p platform.Platform, sel Selection, res *resolve.Resolver) Step {
+func resolveStep(ctx context.Context, r *runner.Runner, cfg *config.Config, app config.App, p platform.Platform, sel Selection, res *resolve.Resolver) Step {
 	step := Step{App: app}
 
 	if sel.IDs == nil && !app.IsEnabled() {
@@ -108,48 +138,15 @@ func resolveStep(ctx context.Context, r *runner.Runner, app config.App, p platfo
 		return step
 	}
 
-	spec, ok := app.Spec(p.Key())
+	spec, a, mapped, why := compatible(ctx, cfg, app, p, res)
+	step.Mapped = mapped
 
-	if reason := res.Catalog.WSLReason(p, app, spec); reason != "" {
-		step.Status, step.Reason = StatusUnavailable, reason
+	if why.Code != "" {
+		step.Status, step.Code, step.Reason = StatusUnavailable, why.Code, why.Text
 
-		return step
-	}
-
-	if !ok && len(app.Install) == 0 {
-		step.Status, step.Reason = StatusUnavailable, "no install method"
-
-		if app.Files != "" {
-			step.Status, step.Reason = StatusFilesOnly, ""
+		if why.Code == ReasonNoRecipe && len(app.Install) == 0 && app.Files != "" {
+			step.Status, step.Code, step.Reason = StatusFilesOnly, "", ""
 		}
-
-		return step
-	}
-
-	// The config was written on another OS: find this OS's installer by itself.
-	if !ok {
-		mapped, source, found := res.Resolve(ctx, app)
-
-		if !found {
-			step.Status = StatusUnavailable
-			step.Reason = "no installer found for " + p.Key() + ": add install." + p.Key() + " (rehome config add-install " + app.ID + " …)"
-
-			return step
-		}
-
-		spec, step.Mapped = mapped, source
-
-		if reason := res.Catalog.WSLReason(p, app, spec); reason != "" {
-			step.Status, step.Reason = StatusUnavailable, reason
-
-			return step
-		}
-	}
-
-	a, err := all.ByManager(spec)
-
-	if err != nil || !a.Available(p) {
-		step.Status, step.Reason = StatusUnavailable, fmt.Sprintf("manager %s is not available here", managerName(spec))
 
 		return step
 	}

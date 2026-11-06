@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -18,8 +19,8 @@ func TestParseDefaultsVersion(t *testing.T) {
 }
 
 func TestParseRejectsUnknownVersion(t *testing.T) {
-	if _, err := Parse([]byte("version: 2\n")); err == nil {
-		t.Error("expected error for version 2")
+	if _, err := Parse(fmt.Appendf(nil, "version: %d\n", CurrentVersion+1)); err == nil {
+		t.Errorf("expected error for version %d", CurrentVersion+1)
 	}
 }
 

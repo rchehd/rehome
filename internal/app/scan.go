@@ -3,14 +3,17 @@ package app
 import (
 	"context"
 	"errors"
+	"maps"
 	"os"
 	"path/filepath"
+	"reflect"
+	"slices"
+	"time"
 
 	"github.com/rchehd/rehome/internal/catalog"
 	"github.com/rchehd/rehome/internal/config"
 	"github.com/rchehd/rehome/internal/files"
-	"github.com/rchehd/rehome/internal/lock"
-	"github.com/rchehd/rehome/internal/platform"
+	"github.com/rchehd/rehome/internal/node"
 	"github.com/rchehd/rehome/internal/scan"
 	"github.com/rchehd/rehome/internal/secrets"
 )
@@ -22,26 +25,18 @@ type ScanPlan struct {
 	Merged   []byte
 	Report   config.MergeReport
 	Result   *scan.Result
-	Lock     *LockPlan
+	Node     *NodePlan
 }
 
-// LockPlan is what a scan writes to the repo lock and to this machine's local lock.
-type LockPlan struct {
-	Path      string
-	LocalPath string
-	Merged    *lock.Lock
-	Local     *lock.Lock
-	Current   map[string]lock.Entry
-	Changes   []string
+// NodePlan is this machine's node as the scan found it.
+type NodePlan struct {
+	Node    *node.Node
+	Changes []string
+	// Gone are apps the last scan here found that this one did not.
+	Gone []string
 }
 
 func PrepareScan(ctx context.Context, o Options) (*ScanPlan, error) {
-	p, err := platform.Detect()
-
-	if err != nil {
-		return nil, err
-	}
-
 	cat, err := catalog.Load()
 
 	if err != nil {
@@ -70,14 +65,23 @@ func PrepareScan(ctx context.Context, o Options) (*ScanPlan, error) {
 		}
 	}
 
-	o.logf("scanning %s …", p)
-	res, err := scan.Run(ctx, o.Runner, p, cat, root, cfg, scan.Options{HarnessData: o.HarnessData, Sessions: o.Sessions, SessionPaths: o.SessionPaths})
+	w, err := openWorkspace(cfg, root)
 
 	if err != nil {
 		return nil, err
 	}
 
-	merged, report, err := config.Merge(existing, res.Config, p.Key(), res.SkipMissing)
+	own, _ := w.WithFiles(w.OwnFiles)
+	o.logf("scanning %s as node %s …", w.Platform, w.Self.Name)
+	res, err := scan.Run(ctx, o.Runner, w.Platform, cat, root, own, scan.Options{HarnessData: o.HarnessData, Sessions: o.Sessions, SessionPaths: o.SessionPaths, FilesRoot: w.Self.Path})
+
+	if err != nil {
+		return nil, err
+	}
+
+	recipes := *res.Config
+	recipes.Files = nil
+	merged, report, err := config.Merge(existing, &recipes, w.Platform.Key())
 
 	if err != nil {
 		return nil, err
@@ -88,19 +92,33 @@ func PrepareScan(ctx context.Context, o Options) (*ScanPlan, error) {
 	res.Findings = append(res.Findings, findings...)
 
 	sp := &ScanPlan{Root: root, Existing: existing, Merged: merged, Report: report, Result: res}
-	sp.Lock, err = prepareLock(ctx, o, sp, p)
+	sp.Node, err = prepareNode(ctx, o, sp, w)
 
 	return sp, err
 }
 
 // Changed reports whether writing would change anything on disk.
 func (sp *ScanPlan) Changed() bool {
-	return sp.Report.Changed() || len(sp.Result.FileChanges) > 0 || len(sp.Lock.Changes) > 0
+	return sp.Report.Changed() || len(sp.Result.FileChanges) > 0 || len(sp.Node.Changes) > 0
 }
 
-// Write stores the accepted settings files, the merged config and both locks.
+// Write stores the accepted settings files, the merged recipes and this machine's node.
 func (sp *ScanPlan) Write(changes []files.Change) error {
-	if err := files.WriteChanges(sp.Root, changes); err != nil {
+	var shared, own []files.Change
+
+	for _, c := range changes {
+		if c.Shared {
+			shared = append(shared, c)
+		} else {
+			own = append(own, c)
+		}
+	}
+
+	if err := files.WriteChanges(sp.Root, shared); err != nil {
+		return err
+	}
+
+	if err := files.WriteChanges(sp.Node.Node.Path, own); err != nil {
 		return err
 	}
 
@@ -108,14 +126,12 @@ func (sp *ScanPlan) Write(changes []files.Change) error {
 		return err
 	}
 
-	if err := sp.Lock.Merged.Save(sp.Lock.Path); err != nil {
-		return err
-	}
+	sp.Node.Node.LastSeen = time.Now().UTC().Truncate(time.Second)
 
-	return sp.Lock.Local.Save(sp.Lock.LocalPath)
+	return sp.Node.Node.Save()
 }
 
-func prepareLock(ctx context.Context, o Options, sp *ScanPlan, p platform.Platform) (*LockPlan, error) {
+func prepareNode(ctx context.Context, o Options, sp *ScanPlan, w *Workspace) (*NodePlan, error) {
 	cfg, err := config.Parse(sp.Merged)
 
 	if err != nil {
@@ -128,28 +144,56 @@ func prepareLock(ctx context.Context, o Options, sp *ScanPlan, p platform.Platfo
 		found[a.ID] = true
 	}
 
-	lp := &LockPlan{Path: lock.Path(sp.Root, o.Lock)}
-
-	if lp.LocalPath, err = lock.LocalPath(); err != nil {
-		return nil, err
-	}
-
-	repo, err := lock.Load(lp.Path)
-
-	if err != nil {
-		return nil, err
-	}
-
-	local, err := lock.Load(lp.LocalPath)
-
-	if err != nil {
-		return nil, err
-	}
-
 	o.logf("reading installed versions …")
-	lp.Current = scan.Versions(ctx, o.Runner, cfg, found, p)
-	lp.Merged, lp.Changes = lock.Sync(repo, local, lp.Current, p.Key())
-	lp.Local = lock.Snapshot(local, lp.Current, p.Key())
+	current := scan.Versions(ctx, o.Runner, cfg, found, w.Platform)
+	next := *w.Self
+	next.System, next.Platform, next.FileKey, next.Arch = w.Platform.String(), w.Platform.Key(), w.Platform.FileKey(), w.Platform.Arch
+	next.Rehome = o.Version
+	next.Apps = current
+	next.Files = mergeFiles(w.Self.Files, sp.Result.Config.Files)
+	next.Unknown = sp.Result.Unknown
+	np := &NodePlan{Node: &next}
 
-	return lp, nil
+	for _, id := range slices.Sorted(maps.Keys(found)) {
+		if old, ok := w.Self.Apps[id]; !ok || old != current[id] {
+			np.Changes = append(np.Changes, id)
+		}
+	}
+
+	for _, id := range slices.Sorted(maps.Keys(w.Self.Apps)) {
+		if !found[id] {
+			np.Changes = append(np.Changes, id)
+			np.Gone = append(np.Gone, id)
+		}
+	}
+
+	if w.Self.LastSeen.IsZero() || !reflect.DeepEqual(w.Self.Files, next.Files) || !reflect.DeepEqual(w.Self.Unknown, next.Unknown) {
+		np.Changes = append(np.Changes, "node "+next.Name)
+	}
+
+	return np, nil
+}
+
+// mergeFiles keeps every mapping the node had, such as hand-written Bitwarden ones, and adds the
+// scanned mappings whose src it does not have yet.
+func mergeFiles(have, scanned map[string][]config.FileMap) map[string][]config.FileMap {
+	out := maps.Clone(have)
+
+	if out == nil {
+		out = map[string][]config.FileMap{}
+	}
+
+	for group, found := range scanned {
+		merged := slices.Clone(out[group])
+
+		for _, f := range found {
+			if !slices.ContainsFunc(merged, func(h config.FileMap) bool { return h.Src == f.Src }) {
+				merged = append(merged, f)
+			}
+		}
+
+		out[group] = merged
+	}
+
+	return out
 }

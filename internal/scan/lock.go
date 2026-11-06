@@ -11,27 +11,19 @@ import (
 	"github.com/rchehd/rehome/internal/runner"
 )
 
-// Versions records, for every app of the merged config, what this machine has: the installed
-// version for apps found here, or unsupported when the config has no installer for this OS.
+// Versions records every app of the merged config found here with its manager and, where it
+// can be read, the installed version.
 func Versions(ctx context.Context, r *runner.Runner, cfg *config.Config, found map[string]bool, p platform.Platform) map[string]lock.Entry {
 	entries := map[string]lock.Entry{}
 
 	for _, app := range cfg.Apps {
-		if cfg.Ignored(app, p.Key(), config.Hostname()) {
+		if cfg.Ignored(app, p.Key(), config.ThisNode()) {
 			continue
 		}
 
 		spec, ok := app.Spec(p.Key())
 
-		if !ok {
-			if !p.WSL && len(app.Install) > 0 {
-				entries[app.ID] = lock.Entry{Unsupported: true}
-			}
-
-			continue
-		}
-
-		if !found[app.ID] {
+		if !ok || !found[app.ID] {
 			continue
 		}
 
@@ -50,16 +42,12 @@ func version(ctx context.Context, r *runner.Runner, spec config.InstallSpec) (lo
 		return lock.Entry{}, false
 	}
 
-	v, ok := a.(adapter.Versioner)
+	e := lock.Entry{}
 
-	if !ok {
-		return lock.Entry{}, false
-	}
-
-	e, err := v.Version(ctx, r, spec)
-
-	if err != nil || (e.Version == "" && e.Commit == "") {
-		return lock.Entry{}, false
+	if v, ok := a.(adapter.Versioner); ok {
+		if got, err := v.Version(ctx, r, spec); err == nil {
+			e = got
+		}
 	}
 
 	e.Manager = a.Name()

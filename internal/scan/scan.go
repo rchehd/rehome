@@ -20,6 +20,7 @@ import (
 	"github.com/rchehd/rehome/internal/discover"
 	"github.com/rchehd/rehome/internal/files"
 	"github.com/rchehd/rehome/internal/platform"
+	"github.com/rchehd/rehome/internal/progress"
 	"github.com/rchehd/rehome/internal/runner"
 	"github.com/rchehd/rehome/internal/secrets"
 	"github.com/rchehd/rehome/internal/sessions"
@@ -29,7 +30,8 @@ type Result struct {
 	Config      *config.Config
 	FileChanges []files.Change
 	Findings    []secrets.Finding
-	Unknown     []string
+	// Unknown are binaries no recipe or catalog entry knows, with where they were found.
+	Unknown     map[string]map[string]string
 	Warnings    []string
 	SkipMissing map[string]bool
 	// Attention lists what scan could not take by itself, each with an action for the user.
@@ -40,6 +42,8 @@ type Options struct {
 	HarnessData  bool
 	Sessions     bool
 	SessionPaths map[string]string
+	// FilesRoot is the node folder settings files are compared with; empty means root.
+	FilesRoot string
 }
 
 type scanner struct {
@@ -49,7 +53,9 @@ type scanner struct {
 	cat  *catalog.Catalog
 	root string
 	apps map[string]*config.App
-	res  *Result
+	// unknown are binaries without a recipe: not apps, but their settings still go to this node.
+	unknown map[string]*config.App
+	res     *Result
 	// hints are extra names (package, binaries) used to find an app's settings.
 	hints map[string][]string
 	// existing is the config already in root; its capture rules are honoured.
@@ -64,7 +70,7 @@ func Run(ctx context.Context, r *runner.Runner, p platform.Platform, cat *catalo
 	if err := sessions.ValidatePaths(options.SessionPaths); err != nil {
 		return nil, err
 	}
-	s := &scanner{ctx: ctx, r: r, p: p, cat: cat, root: root, apps: map[string]*config.App{}, res: &Result{}, hints: map[string][]string{}, existing: existing, options: options}
+	s := &scanner{ctx: ctx, r: r, p: p, cat: cat, root: root, apps: map[string]*config.App{}, unknown: map[string]*config.App{}, res: &Result{}, hints: map[string][]string{}, existing: existing, options: options}
 	s.protectSecretFiles()
 
 	if p.WSL {
@@ -80,6 +86,7 @@ func Run(ctx context.Context, r *runner.Runner, p platform.Platform, cat *catalo
 	}
 
 	for _, a := range all.For(p) {
+		progress.Step(ctx, "scanning %s", a.Name())
 		found, err := a.Scan(ctx, r)
 
 		if err != nil {
@@ -121,6 +128,7 @@ func Run(ctx context.Context, r *runner.Runner, p platform.Platform, cat *catalo
 		}
 	}
 
+	progress.Step(ctx, "looking for installed tools")
 	bins, err := binaries.Resolve(ctx, r, cat, known)
 
 	if err != nil {
@@ -137,6 +145,8 @@ func Run(ctx context.Context, r *runner.Runner, p platform.Platform, cat *catalo
 
 	s.dropUnknownRepos()
 
+	progress.Step(ctx, "reading settings")
+
 	if err := s.captureFiles(); err != nil {
 		return nil, err
 	}
@@ -145,6 +155,14 @@ func Run(ctx context.Context, r *runner.Runner, p platform.Platform, cat *catalo
 	s.res.Config = &config.Config{Version: config.CurrentVersion, Apps: s.sortedApps(), AptRepos: cfg.AptRepos, AptKeys: cfg.AptKeys, Files: cfg.Files, Capture: cfg.Capture}
 
 	return s.res, nil
+}
+
+func (s *scanner) filesRoot() string {
+	if s.options.FilesRoot != "" {
+		return s.options.FilesRoot
+	}
+
+	return s.root
 }
 
 func (s *scanner) addAll(found []adapter.Detected) {
@@ -179,9 +197,21 @@ func (s *scanner) add(d adapter.Detected) {
 	}
 
 	if d.Manager == "unknown" && !ok {
-		disabled := false
-		app.ID, app.Group, app.Enabled, app.Detected = "unknown-"+appID(d), config.UnknownGroup, &disabled, d.Meta
-		s.res.Unknown = append(s.res.Unknown, app.ID)
+		id := "unknown-" + appID(d)
+
+		app.ID, app.Group = id, config.UnknownGroup
+
+		// Only a recipe the user wrote for it makes it an app; otherwise it is this node's note.
+		if _, known := s.existing.App(id); !known {
+			if s.res.Unknown == nil {
+				s.res.Unknown = map[string]map[string]string{}
+			}
+
+			s.res.Unknown[id] = d.Meta
+			s.unknown[id] = app
+
+			return
+		}
 	}
 
 	spec, _ := app.Spec(s.p.Key())
@@ -276,6 +306,7 @@ func (s *scanner) captureRepos() error {
 		}
 
 		if c != nil {
+			c.Shared = true
 			s.addChanges([]files.Change{*c})
 		}
 	}
@@ -302,9 +333,10 @@ func (s *scanner) captureFiles() error {
 			continue
 		}
 
+		progress.Step(s.ctx, "reading settings: %s", id)
 		entry, _ := s.cat.Get(app.Files)
 		if entry.SessionFormat != "" {
-			changes, mappings, warnings := files.CaptureSessions(s.ctx, entry, s.p.FileKey(), s.root, s.options.SessionPaths)
+			changes, mappings, warnings := files.CaptureSessions(s.ctx, entry, s.p.FileKey(), s.filesRoot(), s.options.SessionPaths)
 			for _, err := range warnings {
 				s.warn("%s: %v", id, err)
 			}
@@ -316,7 +348,7 @@ func (s *scanner) captureFiles() error {
 			s.addChanges(changes)
 			continue
 		}
-		changes, fileMaps, err := files.CaptureRules(entry.ID, entry.Files, s.p.FileKey(), s.root, s.options.HarnessData)
+		changes, fileMaps, err := files.CaptureRules(entry.ID, entry.Files, s.p.FileKey(), s.filesRoot(), s.options.HarnessData)
 
 		if err != nil {
 			s.warn("%s settings: %v", id, err)
@@ -334,13 +366,17 @@ func (s *scanner) captureFiles() error {
 		s.addChanges(changes)
 	}
 
+	progress.Step(s.ctx, "reading settings: custom rules")
 	s.captureByRules()
+	progress.Step(s.ctx, "reading settings: GNOME")
 	s.captureDconf()
+	progress.Step(s.ctx, "looking for other settings")
 	s.res.Attention = append(s.res.Attention, discover.DesktopSessions()...)
 	s.res.Attention = append(s.res.Attention, unclaimedConfigDirs(s.res.Config, s.cat, s.p.FileKey())...)
 
 	if _, ok := s.apps["claude-code"]; ok {
-		changes, err := ai.CaptureClaude(s.root)
+		progress.Step(s.ctx, "reading settings: Claude MCP and plugins")
+		changes, err := ai.CaptureClaude(s.filesRoot())
 
 		if err != nil {
 			s.warn("claude MCP/plugins: %v", err)
@@ -358,7 +394,7 @@ func (s *scanner) captureDconf() {
 	}
 
 	const id = "gnome-settings"
-	change, found, err := files.CaptureDconf(s.ctx, s.r, s.root)
+	change, found, err := files.CaptureDconf(s.ctx, s.r, s.filesRoot())
 
 	if err != nil {
 		s.warn("GNOME settings: %v", err)

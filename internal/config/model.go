@@ -1,13 +1,16 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"slices"
+	"sync"
+	"time"
 )
 
 const (
 	FileName       = "rehome.yml"
-	CurrentVersion = 1
+	CurrentVersion = 2
 	AnyPlatform    = "any"
 	UnknownGroup   = "unknown"
 )
@@ -17,12 +20,22 @@ type Config struct {
 	Apps     []App              `yaml:"apps"`
 	AptRepos map[string]AptRepo `yaml:"apt_repos,omitempty"`
 	// AptKeys are legacy keys for /etc/apt/trusted.gpg.d, used by repos without signed-by.
-	AptKeys []string             `yaml:"apt_keys,omitempty"`
-	Files   map[string][]FileMap `yaml:"files,omitempty"`
-	// Ignore lists app ids a given machine (by hostname) never installs.
+	AptKeys []string `yaml:"apt_keys,omitempty"`
+	// Files is never stored in rehome.yml: it is filled from the nodes chosen for each group.
+	Files map[string][]FileMap `yaml:"files,omitempty"`
+	// Ignore lists app ids a given node (by name) never installs.
 	Ignore map[string][]string `yaml:"ignore,omitempty"`
 	// Capture holds settings rules per app id and file key (linux, macos) beyond the catalog.
 	Capture map[string]map[string]FileRule `yaml:"capture,omitempty"`
+	// Removed are apps removed on every node: install --all skips them, sync offers to remove them.
+	Removed []Tombstone `yaml:"removed,omitempty"`
+}
+
+// Tombstone records which node removed an app everywhere, and when.
+type Tombstone struct {
+	ID string    `yaml:"id"`
+	By string    `yaml:"by"`
+	At time.Time `yaml:"at"`
 }
 
 type App struct {
@@ -34,12 +47,10 @@ type App struct {
 	Files       string                 `yaml:"files,omitempty"`
 	Requires    []string               `yaml:"requires,omitempty"`
 	PostInstall []string               `yaml:"post_install,omitempty"`
-	Detected    map[string]string      `yaml:"detected,omitempty"`
 	// Skip lists platform keys (debian, macos, …) where the app is not wanted.
 	Skip []string `yaml:"skip,omitempty"`
 	// Version pins the app permanently, whatever the install mode.
-	Version       string `yaml:"version,omitempty"`
-	MissingOnScan bool   `yaml:"missing_on_scan,omitempty"`
+	Version string `yaml:"version,omitempty"`
 }
 
 // InstallSpec names exactly one manager field; the rest are modifiers of it.
@@ -140,17 +151,25 @@ func (s InstallSpec) managers() []managerField {
 	}
 }
 
-// Ignored reports whether the app is skipped on this platform or ignored on this machine.
-func (c *Config) Ignored(a App, platformKey, host string) bool {
-	return slices.Contains(a.Skip, platformKey) || slices.Contains(c.Ignore[host], a.ID)
+// Ignored reports whether the app is skipped on this platform or ignored on this node.
+func (c *Config) Ignored(a App, platformKey, node string) bool {
+	return slices.Contains(a.Skip, platformKey) || slices.Contains(c.Ignore[node], a.ID)
 }
 
-// Hostname identifies this machine for `ignore`.
 func Hostname() string {
 	h, _ := os.Hostname()
 
 	return h
 }
+
+// ThisNode is this machine's node name, the key of its `ignore` list.
+var ThisNode = sync.OnceValue(func() string {
+	if s, err := LoadSettings(); err == nil && s.NodeName != "" {
+		return s.NodeName
+	}
+
+	return NodeName(Hostname())
+})
 
 func (c *Config) App(id string) (*App, bool) {
 	for i := range c.Apps {
@@ -160,4 +179,36 @@ func (c *Config) App(id string) (*App, bool) {
 	}
 
 	return nil, false
+}
+
+// Tombstone is the everywhere-removal of an app, if it has one.
+func (c *Config) Tombstone(id string) (Tombstone, bool) {
+	i := slices.IndexFunc(c.Removed, func(t Tombstone) bool { return t.ID == id })
+
+	if i < 0 {
+		return Tombstone{}, false
+	}
+
+	return c.Removed[i], true
+}
+
+// Managers are the install methods a recipe can name, as rehome.yml spells them.
+var Managers = []string{"apt", "snap", "flatpak", "brew", "cask", "npm", "pipx", "uv_tool", "cargo", "go", "script"}
+
+// NewSpec is a recipe that installs pkg with manager (for script, pkg is the command).
+func NewSpec(manager, pkg string) (InstallSpec, error) {
+	var s InstallSpec
+	fields := map[string]*string{
+		"apt": &s.Apt, "snap": &s.Snap, "flatpak": &s.Flatpak, "brew": &s.Brew, "cask": &s.Cask, "npm": &s.Npm,
+		"pipx": &s.Pipx, "uv_tool": &s.UvTool, "cargo": &s.Cargo, "go": &s.GoPkg, "script": &s.Script,
+	}
+	field, ok := fields[manager]
+
+	if !ok {
+		return s, fmt.Errorf("unknown manager %q", manager)
+	}
+
+	*field = pkg
+
+	return s, nil
 }

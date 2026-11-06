@@ -156,3 +156,15 @@ func qualified(tap, name string) string {
 
 	return tap + "/" + name
 }
+
+func (Brew) Remove(ctx context.Context, r *runner.Runner, s config.InstallSpec) error {
+	_, err := r.Run(ctx, runner.Cmd{Name: "brew", Args: []string{"uninstall", qualified(s.Tap, s.Brew)}, Env: quiet})
+
+	return err
+}
+
+func (Cask) Remove(ctx context.Context, r *runner.Runner, s config.InstallSpec) error {
+	_, err := r.Run(ctx, runner.Cmd{Name: "brew", Args: []string{"uninstall", "--cask", qualified(s.Tap, s.Cask)}, Env: quiet})
+
+	return err
+}

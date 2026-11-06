@@ -1,7 +1,9 @@
 package cli
 
 import (
+	"maps"
 	"path/filepath"
+	"slices"
 
 	"github.com/spf13/cobra"
 
@@ -17,7 +19,7 @@ func newScanCmd() *cobra.Command {
 		Use:   "scan",
 		Short: "Detect installed software and settings and update the config",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			plan, err := app.PrepareScan(cmd.Context(), opts(cmd))
+			plan, err := withSpinner(cmd, opts(cmd), app.PrepareScan)
 
 			if err != nil {
 				return err
@@ -70,14 +72,14 @@ func printScanSummary(cmd *cobra.Command, sp *app.ScanPlan) {
 	r := sp.Result
 	cmd.Printf("config: %s\n", filepath.Join(sp.Root, config.FileName))
 	rep := sp.Report
-	cmd.Printf("apps: %d added, %d updated, %d returned, %d missing on scan, %d unchanged\n", len(rep.Added), len(rep.Updated), len(rep.Returned), len(rep.MissingOnScan), len(rep.Unchanged))
+	cmd.Printf("recipes: %d added, %d updated, %d unchanged\n", len(rep.Added), len(rep.Updated), len(rep.Unchanged))
 
-	if len(sp.Report.MissingOnScan) > 0 {
-		cmd.Printf("  missing on scan: %v\n", sp.Report.MissingOnScan)
+	if len(sp.Node.Gone) > 0 {
+		cmd.Printf("  gone from this node since the last scan: %v\n", sp.Node.Gone)
 	}
 
 	if len(r.Unknown) > 0 {
-		cmd.Printf("unknown (disabled, add an install method to enable): %v\n", r.Unknown)
+		cmd.Printf("unknown binaries, kept in this node (rehome config add-install <id> … makes a recipe): %v\n", slices.Sorted(maps.Keys(r.Unknown)))
 	}
 
 	newFiles, modified := 0, 0
@@ -91,7 +93,7 @@ func printScanSummary(cmd *cobra.Command, sp *app.ScanPlan) {
 	}
 
 	cmd.Printf("settings files: %d new, %d changed\n", newFiles, modified)
-	cmd.Printf("lock: %d versions recorded, %d changed in %s\n", len(sp.Lock.Current), len(sp.Lock.Changes), sp.Lock.Path)
+	cmd.Printf("node %s: %d versions recorded, %d changed in %s\n", sp.Node.Node.Name, len(sp.Node.Node.Apps), len(sp.Node.Changes), sp.Node.Node.Path)
 
 	for _, f := range r.Findings {
 		cmd.Printf("  redacted secret: %s line %d (%s)\n", f.Path, f.Line, f.Key)

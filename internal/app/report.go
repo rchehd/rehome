@@ -13,21 +13,21 @@ import (
 )
 
 type ScanReport struct {
-	Config    string             `json:"config"`
-	Written   bool               `json:"written"`
-	Apps      AppsReport         `json:"apps"`
-	Unknown   []string           `json:"unknown"`
-	Files     FilesReport        `json:"settings_files"`
-	Secrets   []secrets.Finding  `json:"redacted_secrets"`
-	Attention []discover.Warning `json:"needs_attention"`
-	Warnings  []string           `json:"warnings"`
-	Lock      LockReport         `json:"lock"`
+	Config    string                       `json:"config"`
+	Written   bool                         `json:"written"`
+	Apps      AppsReport                   `json:"apps"`
+	Unknown   map[string]map[string]string `json:"unknown"`
+	Files     FilesReport                  `json:"settings_files"`
+	Secrets   []secrets.Finding            `json:"redacted_secrets"`
+	Attention []discover.Warning           `json:"needs_attention"`
+	Warnings  []string                     `json:"warnings"`
+	Node      NodeReport                   `json:"node"`
 }
 
 type AppsReport struct {
-	Added         []string `json:"added"`
-	Updated       []string `json:"updated"`
-	Returned      []string `json:"returned"`
+	Added   []string `json:"added"`
+	Updated []string `json:"updated"`
+	// MissingOnScan are apps this node had at its last scan that this scan did not find.
 	MissingOnScan []string `json:"missing_on_scan"`
 	Unchanged     int      `json:"unchanged"`
 }
@@ -37,7 +37,8 @@ type FilesReport struct {
 	Changed int `json:"changed"`
 }
 
-type LockReport struct {
+type NodeReport struct {
+	Name     string   `json:"name"`
 	Path     string   `json:"path"`
 	Recorded int      `json:"recorded"`
 	Changed  []string `json:"changed"`
@@ -48,14 +49,14 @@ func (sp *ScanPlan) JSON(written bool) ScanReport {
 		Config:  sp.Root + "/rehome.yml",
 		Written: written,
 		Apps: AppsReport{
-			Added: sp.Report.Added, Updated: sp.Report.Updated, Returned: sp.Report.Returned,
-			MissingOnScan: sp.Report.MissingOnScan, Unchanged: len(sp.Report.Unchanged),
+			Added: sp.Report.Added, Updated: sp.Report.Updated,
+			MissingOnScan: sp.Node.Gone, Unchanged: len(sp.Report.Unchanged),
 		},
 		Unknown:   sp.Result.Unknown,
 		Secrets:   sp.Result.Findings,
 		Attention: sp.Result.Attention,
 		Warnings:  sp.Result.Warnings,
-		Lock:      LockReport{Path: sp.Lock.Path, Recorded: len(sp.Lock.Current), Changed: sp.Lock.Changes},
+		Node:      NodeReport{Name: sp.Node.Node.Name, Path: sp.Node.Node.Path, Recorded: len(sp.Node.Node.Apps), Changed: sp.Node.Changes},
 	}
 
 	for _, c := range sp.Result.FileChanges {
@@ -78,20 +79,27 @@ type PlanStep struct {
 	Installed string `json:"installed,omitempty"`
 	Upgrade   string `json:"upgrade,omitempty"`
 	Reason    string `json:"reason,omitempty"`
+	Code      string `json:"reason_code,omitempty"`
+	PinNote   string `json:"pin_note,omitempty"`
 	Mapped    string `json:"auto_mapped,omitempty"`
+	From      string `json:"from,omitempty"`
+	// Conflict lists the nodes that have the app with different versions or settings.
+	Conflict []string `json:"conflict,omitempty"`
 }
 
 type PlanReport struct {
-	Mode     string     `json:"mode"`
-	Steps    []PlanStep `json:"steps"`
-	Commands []string   `json:"commands_that_will_run"`
+	Mode  string     `json:"mode"`
+	Steps []PlanStep `json:"steps"`
+	// Skipped are apps the nodes have that this plan leaves out, with the reason.
+	Skipped  []install.Choice `json:"skipped"`
+	Commands []string         `json:"commands_that_will_run"`
 	// RunAs is what a person runs in a terminal to apply the plan (sudo needs them).
 	RunAs string `json:"run_as"`
 }
 
-func PlanJSON(plan *install.Plan, options Options) PlanReport {
-	r := PlanReport{Mode: plan.Mode, Commands: plan.Commands(), RunAs: "rehome install --yes --versions " + plan.Mode}
-	for _, flag := range []struct{ name, value string }{{"config", options.Config}, {"lock", options.Lock}} {
+func PlanJSON(plan *install.Plan, options Options, req InstallRequest) PlanReport {
+	r := PlanReport{Mode: plan.Mode, Skipped: plan.Skipped, Commands: plan.Commands(), RunAs: "rehome install " + strings.Join(req.Args(), " ") + " --yes --version " + plan.Mode}
+	for _, flag := range []struct{ name, value string }{{"config", options.Config}} {
 		if flag.value != "" {
 			r.RunAs += " --" + flag.name + " " + runner.Quote(flag.value)
 		}
@@ -119,7 +127,7 @@ func PlanJSON(plan *install.Plan, options Options) PlanReport {
 		name, pkg := s.Spec.Manager()
 		r.Steps = append(r.Steps, PlanStep{
 			ID: s.App.ID, Status: s.Status, Manager: name, Package: pkg,
-			Pin: label(s.Pin), Installed: s.Installed, Upgrade: label(s.Upgrade), Reason: s.Reason, Mapped: s.Mapped,
+			Pin: label(s.Pin), Installed: s.Installed, Upgrade: label(s.Upgrade), Reason: s.Reason, Code: s.Code, PinNote: s.PinNote, Mapped: s.Mapped, From: plan.From[s.App.ID], Conflict: plan.Conflicts[s.App.ID],
 		})
 	}
 

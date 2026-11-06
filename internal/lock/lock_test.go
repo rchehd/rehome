@@ -1,8 +1,6 @@
 package lock
 
 import (
-	"os"
-	"path/filepath"
 	"slices"
 	"testing"
 )
@@ -105,83 +103,5 @@ func TestSyncDoesNotRollBackCommit(t *testing.T) {
 
 	if e, _ := merged.Get("plugin", "debian"); e.Commit != "new" || len(changed) != 0 {
 		t.Errorf("got %v changed %v", e, changed)
-	}
-}
-
-func TestSnapshotReplacesOnlyThisPlatform(t *testing.T) {
-	local := lockWith("old", "debian", node("1"))
-	local.Set("node", "macos", node("22"))
-	next := Snapshot(local, map[string]Entry{"node": node("22.10")}, "debian")
-
-	if _, ok := next.Get("old", "debian"); ok {
-		t.Error("stale debian entry kept")
-	}
-
-	if e, _ := next.Get("node", "macos"); e.Version != "22" {
-		t.Errorf("macos entry = %v", e)
-	}
-}
-
-func TestLoadMissingFile(t *testing.T) {
-	l, err := Load(filepath.Join(t.TempDir(), "nope.lock"))
-
-	if err != nil || len(l.Apps) != 0 {
-		t.Fatalf("got %v %v", l, err)
-	}
-}
-
-func TestSaveRoundTrip(t *testing.T) {
-	path := filepath.Join(t.TempDir(), FileName)
-	l := lockWith("zsh", "debian", Entry{Manager: "apt", Version: "5.9"})
-	l.Set("htop", "debian", Entry{Manager: "apt", Version: "3.3"})
-
-	if err := l.Save(path); err != nil {
-		t.Fatal(err)
-	}
-
-	first, _ := os.ReadFile(path)
-	loaded, err := Load(path)
-
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if err := loaded.Save(path); err != nil {
-		t.Fatal(err)
-	}
-
-	second, _ := os.ReadFile(path)
-
-	if string(first) != string(second) {
-		t.Errorf("unstable output:\n%s\n%s", first, second)
-	}
-
-	if e, _ := loaded.Get("zsh", "debian"); e.Version != "5.9" {
-		t.Errorf("zsh = %v", e)
-	}
-}
-
-func TestLoadRejectsUnknownVersion(t *testing.T) {
-	path := filepath.Join(t.TempDir(), FileName)
-	os.WriteFile(path, []byte("version: 2\napps: {}\n"), 0o644)
-
-	if _, err := Load(path); err == nil {
-		t.Error("version 2 accepted")
-	}
-}
-
-func TestPaths(t *testing.T) {
-	if got := Path("/cfg", ""); got != "/cfg/rehome.lock" {
-		t.Errorf("Path = %s", got)
-	}
-
-	if got := Path("/cfg", "/x.lock"); got != "/x.lock" {
-		t.Errorf("Path flag = %s", got)
-	}
-
-	t.Setenv("XDG_STATE_HOME", "/state")
-
-	if got, _ := LocalPath(); got != "/state/rehome/lock.yml" {
-		t.Errorf("LocalPath = %s", got)
 	}
 }

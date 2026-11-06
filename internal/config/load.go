@@ -2,6 +2,7 @@ package config
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -14,6 +15,8 @@ import (
 )
 
 const fetchTimeout = 30 * time.Second
+
+var ErrNeedsMigration = errors.New("the config uses an older format; run rehome migrate")
 
 // Load reads a config from a file, a directory holding rehome.yml, or an http(s) URL.
 // It also returns the config root that relative files/ paths resolve against.
@@ -44,11 +47,20 @@ func Parse(data []byte) (*Config, error) {
 		cfg.Version = CurrentVersion
 	}
 
+	if cfg.Version < CurrentVersion {
+		return nil, ErrNeedsMigration
+	}
+
 	if cfg.Version != CurrentVersion {
-		return nil, fmt.Errorf("unsupported config version %d", cfg.Version)
+		return nil, fmt.Errorf("config version %d is newer than this rehome; run rehome update", cfg.Version)
 	}
 
 	return &cfg, nil
+}
+
+// FilePath is rehome.yml in the config root.
+func FilePath(root string) string {
+	return filepath.Join(root, FileName)
 }
 
 func IsURL(source string) bool {

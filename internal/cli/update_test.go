@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/spf13/cobra"
+
 	"github.com/rchehd/rehome/internal/selfupdate"
 )
 
@@ -29,7 +31,7 @@ func TestUpdateCommandModes(t *testing.T) {
 					return selfupdate.Result{}, failure
 				}
 				return selfupdate.Result{Current: current, Latest: "0.1.1", Available: mode != "current", Updated: mode == "update" || mode == "json", CheckOnly: options.CheckOnly, DryRun: options.DryRun, Path: "/fixture/rehome"}, nil
-			})
+			}, func(*cobra.Command, string) error { return nil })
 			var output, stderr bytes.Buffer
 			cmd.SetOut(&output)
 			cmd.SetErr(&stderr)

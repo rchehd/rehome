@@ -4,12 +4,15 @@ set -Eeuo pipefail
 rehome="$1"
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
-trap 'echo "Bitwarden E2E failed at line $LINENO" >&2' ERR
+trap 'echo "Bitwarden E2E failed at line $LINENO" >&2; tail -n 25 "$work"/*.log >&2 2>/dev/null' ERR
 
 export HOME="$work/home" XDG_CONFIG_HOME="$work/config" XDG_STATE_HOME="$work/state"
 export PATH="$work/bin:$PATH" BW_FIXTURE_DIR="$work"
 unset BW_SESSION
-mkdir -p "$HOME" "$work/bin" "$work/repo/files/bash"
+node="$work/repo/nodes/e2e"
+mkdir -p "$HOME" "$work/bin" "$node/files/bash" "$XDG_CONFIG_HOME/rehome"
+# This machine is node e2e, so the mappings below are its own and scans keep them.
+printf 'node_id: e2e\nnode_name: e2e\n' > "$XDG_CONFIG_HOME/rehome/settings.yml"
 ssh-keygen -q -t ed25519 -N '' -f "$work/vault-key"
 ssh-keygen -q -t ed25519 -N '' -f "$work/local-key"
 
@@ -43,12 +46,19 @@ SH
 chmod +x "$work/bin/bw"
 
 cat > "$work/repo/rehome.yml" <<'YAML'
-version: 1
+version: 2
 apps:
   - id: bash
     files: bash
   - id: ssh
     files: ssh
+YAML
+
+cat > "$node/node.yml" <<'YAML'
+id: e2e
+name: e2e
+platform: debian
+file_key: linux
 files:
   bash:
     - src: files/bash/.bashrc
@@ -60,12 +70,12 @@ files:
 YAML
 
 printf "export FIXTURE_SETTING='<rehome:redacted>'\n" > "$work/template"
-cp "$work/template" "$work/repo/files/bash/.bashrc"
+cp "$work/template" "$node/files/bash/.bashrc"
 target="$HOME/.bashrc"
 key_target="$HOME/.ssh/id_work"
 
 install_fixture() {
-  "$rehome" install --yes --offline --config "$work/repo" "$@"
+  "$rehome" install --all --yes --offline --config "$work/repo" "$@"
 }
 
 install_fixture > "$work/skipped.log"
@@ -137,12 +147,12 @@ printf '%s\n' '# fixture known hosts' > "$HOME/.ssh/known_hosts"
 
 unset BW_SESSION
 "$rehome" scan --yes --json --config "$work/repo" > "$work/scan.json" 2> "$work/scan.log"
-cmp -s "$work/template" "$work/repo/files/bash/.bashrc"
-grep -q 'bitwarden: bw:' "$work/repo/rehome.yml"
-grep -q '/sshKey/privateKey' "$work/repo/rehome.yml"
-cmp -s "$HOME/.ssh/config" "$work/repo/files/ssh/config"
-cmp -s "$HOME/.ssh/known_hosts" "$work/repo/files/ssh/known_hosts"
-[[ ! -e "$work/repo/files/ssh/id_work" && ! -e "$work/repo/files/ssh/id_work.rehome.bak" ]]
+cmp -s "$work/template" "$node/files/bash/.bashrc"
+grep -q 'bitwarden: bw:' "$node/node.yml"
+grep -q '/sshKey/privateKey' "$node/node.yml"
+cmp -s "$HOME/.ssh/config" "$node/files/ssh/config"
+cmp -s "$HOME/.ssh/known_hosts" "$node/files/ssh/known_hosts"
+[[ ! -e "$node/files/ssh/id_work" && ! -e "$node/files/ssh/id_work.rehome.bak" ]]
 
 if grep -rqE 'fixture-private-token|fixture-private-stderr|fixture-session|fixture-malformed-key|BEGIN OPENSSH PRIVATE KEY' \
   "$work/repo" "$work/"*.log "$work/"*.json; then

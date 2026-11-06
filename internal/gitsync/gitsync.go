@@ -19,30 +19,51 @@ func (g Git) Clone(ctx context.Context, url, path string) error {
 	return g.run(ctx, "", "clone", url, path)
 }
 
-// Pull fast-forwards only; a diverged history is left for the user to resolve.
+// Pull rebases local commits onto the remote, keeping uncommitted changes aside meanwhile.
 func (g Git) Pull(ctx context.Context, path string) error {
-	return g.run(ctx, path, "pull", "--ff-only")
+	return g.run(ctx, path, "pull", "--rebase", "--autostash")
 }
 
-// Push commits every change in the repo (if any) and pushes it.
-func (g Git) Push(ctx context.Context, path, message string) error {
+// Commit records every change in the repo, if there is any.
+func (g Git) Commit(ctx context.Context, path, message string) error {
 	if err := g.run(ctx, path, "add", "-A"); err != nil {
 		return err
 	}
 
 	dirty, err := g.dirty(ctx, path)
 
-	if err != nil {
+	if err != nil || !dirty {
 		return err
 	}
 
-	if dirty {
-		if err := g.run(ctx, path, "commit", "-m", message); err != nil {
-			return err
-		}
+	return g.run(ctx, path, "commit", "-m", message)
+}
+
+func (g Git) PushOnly(ctx context.Context, path string) error {
+	return g.run(ctx, path, "push")
+}
+
+func (g Git) Fetch(ctx context.Context, path string) error {
+	return g.run(ctx, path, "fetch", "--quiet")
+}
+
+// Upstream reads file as the last fetched upstream has it.
+func (g Git) Upstream(ctx context.Context, path, file string) ([]byte, error) {
+	return exec.CommandContext(ctx, "git", "-C", path, "show", "@{upstream}:"+file).Output()
+}
+
+// AbortRebase gives up a rebase a failed pull left half done; without one it does nothing.
+func (g Git) AbortRebase(ctx context.Context, path string) {
+	_ = exec.CommandContext(ctx, "git", "-C", path, "rebase", "--abort").Run()
+}
+
+// SetAside keeps HEAD on branch keep and moves the clone to the fetched upstream.
+func (g Git) SetAside(ctx context.Context, path, keep string) error {
+	if err := g.run(ctx, path, "branch", keep); err != nil {
+		return err
 	}
 
-	return g.run(ctx, path, "push")
+	return g.run(ctx, path, "reset", "--hard", "--quiet", "@{upstream}")
 }
 
 func (g Git) RemoteURL(ctx context.Context, path string) (string, error) {

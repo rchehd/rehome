@@ -12,6 +12,7 @@ import (
 	"github.com/rchehd/rehome/internal/config"
 	"github.com/rchehd/rehome/internal/discover"
 	"github.com/rchehd/rehome/internal/files"
+	"github.com/rchehd/rehome/internal/progress"
 )
 
 // captureByRules takes settings of apps the catalog does not cover: the config's own or
@@ -20,13 +21,17 @@ func (s *scanner) captureByRules() {
 	key := s.p.FileKey()
 	claimed := discover.Claimed(catalogRules(s.cat, key))
 
-	for _, id := range slices.Sorted(maps.Keys(s.apps)) {
-		app := s.apps[id]
+	apps := maps.Clone(s.apps)
+	maps.Copy(apps, s.unknown)
+
+	for _, id := range slices.Sorted(maps.Keys(apps)) {
+		app := apps[id]
 
 		if app.Files != "" {
 			continue
 		}
 
+		progress.Step(s.ctx, "reading settings: %s", id)
 		rules, ok := s.existing.Capture[id]
 
 		if !ok {
@@ -47,7 +52,7 @@ func (s *scanner) captureByRules() {
 		rules = maps.Clone(rules)
 		rules[key] = rules[key].WithAutoDefaults()
 
-		changes, fileMaps, err := files.CaptureRules(id, rules, key, s.root, s.options.HarnessData)
+		changes, fileMaps, err := files.CaptureRules(id, rules, key, s.filesRoot(), s.options.HarnessData)
 
 		if err != nil {
 			s.warn("%s settings: %v", id, err)

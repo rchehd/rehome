@@ -24,6 +24,8 @@ type Change struct {
 	Old, New []byte
 	Mode     fs.FileMode
 	Findings []secrets.Finding
+	// Shared marks a file kept at the config root for every node, such as an apt keyring.
+	Shared bool
 }
 
 // Capture collects an app's settings files by its catalog rules.
@@ -42,11 +44,7 @@ func CaptureRules(id string, rules map[string]config.FileRule, fileKey, root str
 	}
 
 	base := adapter.Home(rule.Base)
-	rels, err := selectFiles(base, rule)
-
-	if err != nil {
-		return nil, nil, err
-	}
+	rels := (&walker{}).walk(base, rule)
 
 	var changes []Change
 	var maps []config.FileMap
@@ -153,15 +151,29 @@ func fileMap(rules map[string]config.FileRule, dst, rel string, perm fs.FileMode
 
 // Select lists the files a rule picks under base, relative to it.
 func Select(base string, rule config.FileRule) ([]string, error) {
-	return selectFiles(base, rule)
+	w := &walker{}
+
+	return w.walk(base, rule), nil
 }
 
-// selectFiles walks only the directories an include pattern can reach. It follows symlinks,
+// SelectWithin is Select that stops once the picked files of up to 1 MB each exceed limit bytes.
+func SelectWithin(base string, rule config.FileRule, limit int64) (rels []string, over bool) {
+	w := &walker{limit: limit}
+	rels = w.walk(base, rule)
+
+	return rels, w.over()
+}
+
+// walk visits only the directories an include pattern can reach. It follows symlinks,
 // so dotfiles linked in by stow and similar tools are found; a loop is walked once.
-func selectFiles(base string, rule config.FileRule) ([]string, error) {
-	w := &walker{base: base, rule: rule.WithAutoDefaults(), seen: map[string]bool{}}
+func (w *walker) walk(base string, rule config.FileRule) []string {
+	w.base, w.rule, w.seen = base, rule.WithAutoDefaults(), map[string]bool{}
 
 	for _, inc := range rule.Include {
+		if w.over() {
+			break
+		}
+
 		start := staticPrefix(inc)
 		info, err := os.Stat(filepath.Join(base, start))
 
@@ -170,7 +182,7 @@ func selectFiles(base string, rule config.FileRule) ([]string, error) {
 		}
 
 		if !info.IsDir() {
-			w.add(start)
+			w.add(start, info.Size())
 
 			continue
 		}
@@ -179,7 +191,7 @@ func selectFiles(base string, rule config.FileRule) ([]string, error) {
 		w.dir(inc, start)
 	}
 
-	return w.rels, nil
+	return w.rels
 }
 
 type walker struct {
@@ -188,9 +200,15 @@ type walker struct {
 	seen    map[string]bool
 	visited map[string]bool
 	rels    []string
+	// limit stops the walk once size exceeds it; zero means no limit.
+	limit, size int64
 }
 
-func (w *walker) add(rel string) {
+func (w *walker) over() bool {
+	return w.limit > 0 && w.size > w.limit
+}
+
+func (w *walker) add(rel string, size int64) {
 	name := filepath.Base(rel)
 
 	if strings.Contains(name, BackupSuffix) || strings.HasPrefix(name, ".rehome-secret-") {
@@ -200,6 +218,10 @@ func (w *walker) add(rel string) {
 	if w.rule.Matches(rel) && !w.seen[rel] {
 		w.seen[rel] = true
 		w.rels = append(w.rels, rel)
+
+		if size <= 1<<20 {
+			w.size += size
+		}
 	}
 }
 
@@ -219,6 +241,10 @@ func (w *walker) dir(inc, rel string) {
 	}
 
 	for _, e := range entries {
+		if w.over() {
+			return
+		}
+
 		child := path.Join(rel, e.Name())
 		info, err := os.Stat(filepath.Join(w.base, child))
 
@@ -228,7 +254,7 @@ func (w *walker) dir(inc, rel string) {
 
 		if !info.IsDir() {
 			if info.Mode().IsRegular() {
-				w.add(child)
+				w.add(child, info.Size())
 			}
 
 			continue

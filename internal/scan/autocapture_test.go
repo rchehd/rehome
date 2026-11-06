@@ -1,6 +1,7 @@
 package scan
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"slices"
@@ -105,7 +106,8 @@ func TestAutoCaptureRefreshesLegacyRulesWithoutChangingManualRules(t *testing.T)
 			}
 			rule := config.FileRule{Base: "~", Include: []string{".config/Claude/**"}, Exclude: []string{"**/Cache/**"}, Origin: origin}
 			s := &scanner{
-				p: platform.Platform{OS: "linux", ID: "ubuntu"}, cat: &catalog.Catalog{}, root: t.TempDir(),
+				ctx: context.Background(),
+				p:   platform.Platform{OS: "linux", ID: "ubuntu"}, cat: &catalog.Catalog{}, root: t.TempDir(),
 				apps:     map[string]*config.App{"claude-desktop": {ID: "claude-desktop"}},
 				existing: &config.Config{Capture: map[string]map[string]config.FileRule{"claude-desktop": {"linux": rule}}},
 				res:      &Result{Config: &config.Config{Files: map[string][]config.FileMap{}}},

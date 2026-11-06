@@ -12,7 +12,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/rchehd/rehome/internal/lock"
+	"github.com/rchehd/rehome/internal/config"
 	"github.com/rchehd/rehome/internal/runner"
 	"github.com/rchehd/rehome/internal/secrets"
 )
@@ -254,13 +254,11 @@ func formatDconf(settings dconfSettings) []byte {
 }
 
 func backupDconf(data []byte) (string, error) {
-	path, err := lock.LocalPath()
+	dir, err := config.StateDir()
 
 	if err != nil {
 		return "", err
 	}
-
-	dir := filepath.Dir(path)
 
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return "", err

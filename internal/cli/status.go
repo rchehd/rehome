@@ -1,13 +1,17 @@
 package cli
 
 import (
+	"context"
 	"errors"
+	"path/filepath"
 
 	"github.com/spf13/cobra"
 
 	"github.com/rchehd/rehome/internal/app"
 	"github.com/rchehd/rehome/internal/config"
-	"github.com/rchehd/rehome/internal/gitsync"
+	"github.com/rchehd/rehome/internal/node"
+	"github.com/rchehd/rehome/internal/progress"
+	"github.com/rchehd/rehome/internal/source"
 	"github.com/rchehd/rehome/internal/status"
 	"github.com/rchehd/rehome/internal/tui"
 )
@@ -24,22 +28,10 @@ func newStatusCmd() *cobra.Command {
 			if browse && !interactive() {
 				return errors.New("--interactive needs a terminal; use --details or --json when redirecting output")
 			}
-			st, err := computeStatus(cmd)
+			st, err := withSpinner(cmd, opts(cmd), computeStatus)
 
 			if err != nil {
 				return err
-			}
-
-			if flags.config == "" {
-				s, err := config.LoadSettings()
-
-				if err != nil {
-					return err
-				}
-
-				if s.Linked() {
-					st.Source = gitsync.RemoteStatus(cmd.Context(), s.ClonePath)
-				}
 			}
 
 			if flags.json {
@@ -71,6 +63,25 @@ func newStatusCmd() *cobra.Command {
 	return cmd
 }
 
-func computeStatus(cmd *cobra.Command) (*status.Status, error) {
-	return app.Status(cmd.Context(), opts(cmd))
+func computeStatus(ctx context.Context, o app.Options) (*status.Status, error) {
+	st, err := app.Status(ctx, o)
+
+	if err != nil || flags.config != "" {
+		return st, err
+	}
+
+	s, err := config.LoadSettings()
+
+	if err != nil {
+		return nil, err
+	}
+
+	if s.Linked() {
+		progress.Step(ctx, "checking the config repo")
+		src := source.Open(s, false, nil)
+		st.Source = src.Status(ctx)
+		st.Node.Unpublished = src.Unpublished(ctx, filepath.Join(node.Dir, st.Node.Name))
+	}
+
+	return st, nil
 }

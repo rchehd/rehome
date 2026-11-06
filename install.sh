@@ -66,3 +66,9 @@ case ":$PATH:" in
   *":$dest:"*) ;;
   *) echo "add $dest to your PATH" ;;
 esac
+
+case "${SHELL##*/}" in
+  zsh) echo "tab completion: echo 'source <(rehome completion zsh)' >> ~/.zshrc" ;;
+  bash) echo "tab completion: echo 'source <(rehome completion bash)' >> ~/.bashrc" ;;
+  fish) echo "tab completion: rehome completion fish > ~/.config/fish/completions/rehome.fish" ;;
+esac

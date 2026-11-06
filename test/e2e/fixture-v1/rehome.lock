@@ -1,0 +1,6 @@
+version: 1
+apps:
+  htop:
+    debian:
+      manager: apt
+      version: 3.3.0

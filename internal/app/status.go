@@ -5,26 +5,20 @@ import (
 
 	"github.com/rchehd/rehome/internal/catalog"
 	"github.com/rchehd/rehome/internal/config"
-	"github.com/rchehd/rehome/internal/lock"
-	"github.com/rchehd/rehome/internal/platform"
+	"github.com/rchehd/rehome/internal/node"
 	"github.com/rchehd/rehome/internal/scan"
 	"github.com/rchehd/rehome/internal/status"
 )
 
 func Status(ctx context.Context, o Options) (*status.Status, error) {
-	cfg, root, err := LoadConfig(o)
+	w, err := LoadWorkspace(o)
 
 	if err != nil {
 		return nil, err
 	}
 
+	cfg, _ := w.WithFiles(w.OwnFiles)
 	existing, err := config.Marshal(cfg)
-
-	if err != nil {
-		return nil, err
-	}
-
-	p, err := platform.Detect()
 
 	if err != nil {
 		return nil, err
@@ -36,23 +30,15 @@ func Status(ctx context.Context, o Options) (*status.Status, error) {
 		return nil, err
 	}
 
-	repo, err := lock.Load(lock.Path(root, o.Lock))
+	options := scan.Options{HarnessData: o.HarnessData, Sessions: o.Sessions, SessionPaths: o.SessionPaths, FilesRoot: w.Self.Path}
+
+	st, err := status.Compute(ctx, o.Runner, cfg, existing, w.Root, w.Platform, cat, node.Versions(w.Live()), w.Self.Lock(), options)
 
 	if err != nil {
 		return nil, err
 	}
 
-	localPath, err := lock.LocalPath()
+	st.Node = status.NodeState{Name: w.Self.Name, Unscanned: w.Self.LastSeen.IsZero() || st.ScanChanges() > 0}
 
-	if err != nil {
-		return nil, err
-	}
-
-	local, err := lock.Load(localPath)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return status.Compute(ctx, o.Runner, cfg, existing, root, p, cat, repo, local, scan.Options{HarnessData: o.HarnessData, Sessions: o.Sessions, SessionPaths: o.SessionPaths})
+	return st, nil
 }

@@ -62,7 +62,7 @@ func ForApp(id string, names, claimed []string) (*config.FileRule, *Warning) {
 		return nil, &Warning{
 			ID:     id,
 			Path:   "~/" + strings.TrimSuffix(include[0], "/**"),
-			Reason: fmt.Sprintf("%d MB of files, too large to take whole", size>>20),
+			Reason: fmt.Sprintf("more than %d MB of files, too large to take whole", maxAppBytes>>20),
 			Action: "add a capture rule for " + id + " with just its settings files",
 		}
 	}
@@ -125,10 +125,10 @@ func HasSettings(dir string) bool {
 // measure sums the text files a rule would take (the same selection Capture uses).
 func measure(rule config.FileRule) (int64, int) {
 	base := adapter.Home(rule.Base)
-	rels, err := files.Select(base, rule)
+	rels, over := files.SelectWithin(base, rule, maxAppBytes)
 
-	if err != nil {
-		return 0, 0
+	if over {
+		return maxAppBytes + 1, len(rels)
 	}
 
 	var size int64

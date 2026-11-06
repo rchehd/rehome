@@ -1,4 +1,4 @@
-version: 1
+version: 2
 apps:
   - id: postinst-broken # its postinst fails: apt must keep working for everything after it
     install: { debian: { apt: rehome-e2e-broken, repo: local } }
@@ -33,7 +33,7 @@ apps:
   - id: node
     requires: [nvm, libatomic1]
     install: { any: { script: '[ -s "$HOME/.nvm/nvm.sh" ] && . "$HOME/.nvm/nvm.sh"; nvm install ''lts/*'' && nvm alias default ''lts/*''', bin: ~/.nvm/versions/node/*/bin/node } }
-  - id: cowsay # pinned to an old version in rehome.lock
+  - id: cowsay # node source has an old version
     requires: [node]
     install: { any: { npm: cowsay } }
   - id: rustup # disabled on purpose: dependents must still install
@@ -53,8 +53,3 @@ apt_repos:
   broken: { source: files/apt/sources/broken.list }
   local: { source: files/apt/sources/local.list }
 
-files:
-  zsh:
-    - { src: files/zsh/.zshrc, dest: { linux: ~/.zshrc } }
-  oh-my-zsh:
-    - { src: files/oh-my-zsh/themes/e2e.zsh-theme, dest: { linux: ~/.oh-my-zsh/custom/themes/e2e.zsh-theme } }

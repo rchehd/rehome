@@ -25,13 +25,13 @@ func TestResolveStepMapsMissingPlatform(t *testing.T) {
 		return config.App{ID: id, Install: map[string]config.InstallSpec{"debian": {Apt: pkg}}}
 	}
 
-	step := resolveStep(context.Background(), &runner.Runner{}, debianOnly("htop", "htop"), mac, Selection{}, res)
+	step := resolveStep(context.Background(), &runner.Runner{}, &config.Config{}, debianOnly("htop", "htop"), mac, Selection{}, res)
 
 	if step.Status != StatusInstall || step.Spec.Brew != "htop" || step.Mapped != resolve.SourceSameName {
 		t.Errorf("htop step = %+v", step)
 	}
 
-	step = resolveStep(context.Background(), &runner.Runner{}, debianOnly("winonly", "winonly"), mac, Selection{}, res)
+	step = resolveStep(context.Background(), &runner.Runner{}, &config.Config{}, debianOnly("winonly", "winonly"), mac, Selection{}, res)
 
 	if step.Status != StatusUnavailable || !strings.Contains(step.Reason, "add install.macos") {
 		t.Errorf("unmapped step = %+v", step)

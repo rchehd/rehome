@@ -3,6 +3,8 @@ package resolve
 
 import (
 	"context"
+	"maps"
+	"slices"
 	"strings"
 
 	"github.com/rchehd/rehome/internal/catalog"
@@ -14,6 +16,7 @@ const (
 	SourceSameName = "same name"
 	SourceRename   = "known rename"
 	SourceRepology = "repology"
+	SourcePortable = "same package as on another OS"
 )
 
 // Index answers whether a package with this exact name exists on this machine's managers.
@@ -45,6 +48,10 @@ var renames = map[string]string{
 func (r *Resolver) Resolve(ctx context.Context, app config.App) (config.InstallSpec, string, bool) {
 	if spec, ok := r.fromCatalog(app); ok {
 		return spec, SourceCatalog, true
+	}
+
+	if spec, ok := portable(app); ok {
+		return spec, SourcePortable, true
 	}
 
 	if r.skipped(app) {
@@ -92,6 +99,19 @@ func (r *Resolver) fromCatalog(app config.App) (config.InstallSpec, bool) {
 	if e, ok := r.Catalog.Get(app.ID); ok {
 		if spec, ok := (config.App{Install: e.Install}).Spec(r.PlatformKey); ok {
 			return spec, true
+		}
+	}
+
+	return config.InstallSpec{}, false
+}
+
+// portable reuses another platform's spec whose manager works the same everywhere (npm, pipx, uv, cargo, go).
+func portable(app config.App) (config.InstallSpec, bool) {
+	for _, key := range slices.Sorted(maps.Keys(app.Install)) {
+		s := app.Install[key]
+
+		if s.Npm != "" || s.Pipx != "" || s.UvTool != "" || s.Cargo != "" || s.GoPkg != "" {
+			return config.InstallSpec{Npm: s.Npm, Pipx: s.Pipx, UvTool: s.UvTool, Cargo: s.Cargo, GoPkg: s.GoPkg, Bin: s.Bin}, true
 		}
 	}
 

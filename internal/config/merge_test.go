@@ -31,7 +31,7 @@ func ids(cfg *Config) []string {
 func merge(t *testing.T, existing string, scanned *Config, key string) (*Config, []byte, MergeReport) {
 	t.Helper()
 
-	out, report, err := Merge([]byte(existing), scanned, key, nil)
+	out, report, err := Merge([]byte(existing), scanned, key)
 
 	if err != nil {
 		t.Fatal(err)
@@ -62,7 +62,7 @@ func TestMergeIntoEmpty(t *testing.T) {
 }
 
 func TestMergeKeepsUserEditsByteForByte(t *testing.T) {
-	existing := `version: 1
+	existing := `version: 2
 apps:
   # my favourite shell
   - id: zsh
@@ -112,44 +112,15 @@ func TestMergeInsertsAfterLastAppOfGroup(t *testing.T) {
 	}
 }
 
-func TestMergeFlagsMissingOnScan(t *testing.T) {
+func TestMergeLeavesAppsMissingHereAlone(t *testing.T) {
 	existing := `apps:
   - id: gone
     install: { debian: { apt: gone } }
-  - id: macsonly
-    install: { macos: { apt: x } }
 `
-	cfg, _, report := merge(t, existing, apps(), "debian")
+	_, out, report := merge(t, existing, apps(), "debian")
 
-	if !cfg.Apps[0].MissingOnScan {
-		t.Error("gone should be flagged")
-	}
-
-	if cfg.Apps[1].MissingOnScan {
-		t.Error("macos-only app must not be flagged on debian")
-	}
-
-	if !slices.Equal(report.MissingOnScan, []string{"gone"}) {
-		t.Errorf("missing = %v", report.MissingOnScan)
-	}
-}
-
-func TestMergeReturnedApp(t *testing.T) {
-	existing := `apps:
-  - id: back
-    install: { debian: { apt: back } }
-    missing_on_scan: true
-`
-	scanned := apps(App{ID: "back", Install: debian(InstallSpec{Apt: "back"})})
-
-	cfg, _, report := merge(t, existing, scanned, "debian")
-
-	if cfg.Apps[0].MissingOnScan {
-		t.Error("flag should be removed")
-	}
-
-	if !slices.Equal(report.Returned, []string{"back"}) {
-		t.Errorf("returned = %v", report.Returned)
+	if string(out) != existing || report.Changed() {
+		t.Errorf("a recipe not found here changed the config:\n%s", out)
 	}
 }
 
@@ -238,7 +209,7 @@ apt_repos:
 }
 
 func TestMergeRejectsNonMappingRoot(t *testing.T) {
-	if _, _, err := Merge([]byte("- a\n- b\n"), apps(), "debian", nil); err == nil {
+	if _, _, err := Merge([]byte("- a\n- b\n"), apps(), "debian"); err == nil {
 		t.Error("expected error")
 	}
 }

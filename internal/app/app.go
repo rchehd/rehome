@@ -7,10 +7,13 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
+	"slices"
+	"strings"
 
 	"github.com/rchehd/rehome/internal/config"
 	"github.com/rchehd/rehome/internal/install"
 	"github.com/rchehd/rehome/internal/lock"
+	"github.com/rchehd/rehome/internal/node"
 	"github.com/rchehd/rehome/internal/platform"
 	"github.com/rchehd/rehome/internal/runner"
 )
@@ -18,8 +21,8 @@ import (
 type Options struct {
 	// Config is the --config value (path, folder or URL); empty uses the linked repo.
 	Config string
-	// Lock is the --lock value; empty means rehome.lock next to the config.
-	Lock         string
+	// Version is this rehome's version, recorded in the node.
+	Version      string
 	Runner       *runner.Runner
 	HarnessData  bool
 	Sessions     bool
@@ -59,49 +62,133 @@ func LoadConfig(o Options) (*config.Config, string, error) {
 	return cfg, root, nil
 }
 
-// InstallInput is everything needed to build an install plan.
+// InstallRequest is what install was asked for, with nodes named by name or id.
+type InstallRequest struct {
+	IDs          []string
+	From         string
+	Prefer       []string
+	IncludeStale bool
+	NoSettings   bool
+	// Choose takes an app from the named node (a choice in the picker).
+	Choose map[string]string
+}
+
+// Args are the install arguments that repeat the request in a terminal.
+func (r InstallRequest) Args() []string {
+	args := slices.Clone(r.IDs)
+
+	if len(args) == 0 && r.From == "" {
+		args = []string{"--all"}
+	}
+
+	if r.From != "" {
+		args = append(args, "--from", runner.Quote(r.From))
+	}
+
+	if len(r.Prefer) > 0 {
+		args = append(args, "--prefer", runner.Quote(strings.Join(r.Prefer, ",")))
+	}
+
+	if r.IncludeStale {
+		args = append(args, "--include-stale")
+	}
+
+	if r.NoSettings {
+		args = append(args, "--no-settings")
+	}
+
+	return args
+}
+
+// InstallInput is everything needed to build an install plan: the apps picked from the nodes,
+// with their versions and settings.
 type InstallInput struct {
-	Config   *config.Config
-	Root     string
-	Platform platform.Platform
-	Lock     *lock.Lock
+	Config    *config.Config
+	Root      string
+	FileRoots map[string]string
+	Platform  platform.Platform
+	Lock      *lock.Lock
+	Pick      *install.Pick
+	Workspace *Workspace
 }
 
-func LoadInstall(o Options) (*InstallInput, error) {
-	cfg, root, err := LoadConfig(o)
+func LoadInstall(o Options, req InstallRequest) (*InstallInput, error) {
+	w, err := LoadWorkspace(o)
 
 	if err != nil {
 		return nil, err
 	}
 
-	p, err := platform.Detect()
+	nodes := w.Live()
+
+	if req.IncludeStale {
+		nodes = w.All()
+	}
+
+	r := install.Request{IDs: req.IDs, NoSettings: req.NoSettings}
+
+	if req.From != "" {
+		if r.From = node.Find(w.All(), req.From); r.From == nil {
+			return nil, fmt.Errorf("unknown node %q (rehome nodes lists them)", req.From)
+		}
+	}
+
+	for _, ref := range req.Prefer {
+		n := node.Find(nodes, ref)
+
+		if n == nil {
+			return nil, fmt.Errorf("unknown or stale node %q in --prefer", ref)
+		}
+
+		r.Prefer = append(r.Prefer, n)
+	}
+
+	for id, ref := range req.Choose {
+		n := node.Find(nodes, ref)
+
+		if n == nil {
+			return nil, fmt.Errorf("unknown or stale node %q chosen for %s", ref, id)
+		}
+
+		if r.Choose == nil {
+			r.Choose = map[string]*node.Node{}
+		}
+
+		r.Choose[id] = n
+	}
+
+	pick, err := install.Select(w.Config, nodes, w.Platform.Key(), w.Platform.FileKey(), r)
 
 	if err != nil {
 		return nil, err
 	}
 
-	lk, err := lock.Load(lock.Path(root, o.Lock))
+	cfg, roots := w.WithFiles(pick.Files)
 
-	if err != nil {
-		return nil, err
-	}
-
-	return &InstallInput{Config: cfg, Root: root, Platform: p, Lock: lk}, nil
+	return &InstallInput{Config: cfg, Root: w.Root, FileRoots: roots, Platform: w.Platform, Lock: pick.Lock, Pick: pick, Workspace: w}, nil
 }
 
+// BuildPlan plans the picked apps; sel.IDs narrows them further (a checklist choice).
 func BuildPlan(ctx context.Context, o Options, in *InstallInput, sel install.Selection) (*install.Plan, error) {
 	o.logf("checking what is installed …")
 
-	return install.Build(ctx, o.Runner, in.Config, in.Root, in.Platform, sel, in.Lock)
-}
-
-// DefaultMode is the install mode without an explicit choice: the lock's versions if any.
-func DefaultMode(lk *lock.Lock) string {
-	if len(lk.Apps) > 0 {
-		return install.ModeLocked
+	if sel.IDs == nil {
+		sel.IDs = append([]string{}, in.Pick.IDs...)
 	}
 
-	return install.ModeLatest
+	plan, err := install.Build(ctx, o.Runner, in.Config, in.Root, in.Platform, sel, in.Lock)
+
+	if err != nil {
+		return nil, err
+	}
+
+	plan.FileRoots = in.FileRoots
+	plan.From = in.Pick.From()
+	plan.Conflicts = in.Pick.Conflicts
+	plan.Skipped = in.Pick.Skipped
+	plan.Recorded = in.Workspace.Record
+
+	return plan, nil
 }
 
 // ConfigPath is the local config file commands edit: an explicit .yml path, else rehome.yml

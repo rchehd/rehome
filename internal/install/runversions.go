@@ -33,7 +33,7 @@ func (x *executor) install(s Step) error {
 	return s.Adapter.Install(x.ctx, x.r, s.Spec)
 }
 
-// upgrade raises installed apps older than the lock only when asked; otherwise it reports them.
+// upgrade raises installed apps older than on the source nodes only when asked; otherwise it reports them.
 func (x *executor) upgrade() {
 	for _, s := range x.plan.Steps {
 		if s.Upgrade == (lock.Entry{}) || x.state[s.App.ID] != "installed" {
@@ -79,23 +79,9 @@ func pinLabel(e lock.Entry) string {
 	return e.Version
 }
 
-// recordVersions updates this machine's local lock with what is installed after the run.
+// recordVersions passes what is installed after the run, with its version where readable, to the plan's recorder.
 func (x *executor) recordVersions() {
-	if x.r.DryRun {
-		return
-	}
-
-	path, err := lock.LocalPath()
-
-	if err != nil {
-		return
-	}
-
-	local, err := lock.Load(path)
-
-	if err != nil {
-		x.note("local lock: %v", err)
-
+	if x.r.DryRun || x.plan.Recorded == nil {
 		return
 	}
 
@@ -106,19 +92,28 @@ func (x *executor) recordVersions() {
 			continue
 		}
 
-		v, ok := s.Adapter.(adapter.Versioner)
+		// Like scan, the node records the app even when its version cannot be read.
+		var e lock.Entry
 
-		if !ok {
-			continue
+		if v, ok := s.Adapter.(adapter.Versioner); ok {
+			if got, err := v.Version(x.ctx, x.r, s.Spec); err == nil {
+				e = got
+			}
 		}
 
-		if e, err := v.Version(x.ctx, x.r, s.Spec); err == nil && (e.Version != "" || e.Commit != "") {
-			e.Manager = s.Adapter.Name()
-			local.Set(s.App.ID, x.plan.Platform.Key(), e)
-		}
+		e.Manager = s.Adapter.Name()
+		x.plan.Recorded(s.App.ID, e)
 	}
+}
 
-	if err := local.Save(path); err != nil {
-		x.note("local lock: %v", err)
+// sources says which node each installed app came from, and what the nodes have that was left out.
+func (x *executor) sources() {
+	x.report.TakenFrom = map[string]string{}
+	x.report.LeftOut = append([]Choice{}, x.plan.Skipped...)
+
+	for _, o := range append(slices.Clone(x.report.Done), x.report.Upgraded...) {
+		if from := x.plan.From[o.ID]; from != "" {
+			x.report.TakenFrom[o.ID] = from
+		}
 	}
 }

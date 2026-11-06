@@ -22,7 +22,7 @@ type Options struct {
 	Sessions       bool
 	SessionPaths   map[string]string
 	ResolveSecret  func(string) (string, error)
-	// Upgrade raises every installed app older than the lock; UpgradeIDs only those listed.
+	// Upgrade raises every installed app older than on the source nodes; UpgradeIDs only those listed.
 	Upgrade    bool
 	UpgradeIDs []string
 }
@@ -45,10 +45,13 @@ type Report struct {
 	KeptLocal     []files.ApplyResult `json:"kept_local"`
 	ManualSecrets []string            `json:"fill_in_secrets"`
 	Notes         []string            `json:"notes"`
-	// Upgraded were raised to the lock version; Upgradable could be (rehome install --upgrade).
+	// Upgraded were raised to the source nodes' version; Upgradable could be (rehome install --upgrade).
 	Upgraded     []Outcome `json:"upgraded"`
 	Upgradable   []Outcome `json:"upgradable"`
 	VersionNotes []string  `json:"version_notes"`
+	// TakenFrom maps each installed app to the node it came from; LeftOut are apps the nodes have that were not planned.
+	TakenFrom map[string]string `json:"taken_from"`
+	LeftOut   []Choice          `json:"left_out"`
 }
 
 type executor struct {
@@ -91,6 +94,7 @@ func Execute(ctx context.Context, r *runner.Runner, plan *Plan, opts Options, pr
 	x.restoreClaude()
 	x.postInstall()
 	x.recordVersions()
+	x.sources()
 
 	return x.report, nil
 }
@@ -358,7 +362,7 @@ func (x *executor) applyFiles(s Step) bool {
 	}
 
 	x.progress(Event{ID: s.App.ID, Phase: "settings"})
-	results, err := files.Apply(x.ctx, x.plan.Root, x.plan.Config.Files[s.App.Files], files.ApplyOptions{
+	results, err := files.Apply(x.ctx, x.plan.FilesRoot(s.App.Files), x.plan.Config.Files[s.App.Files], files.ApplyOptions{
 		FileKey:       x.plan.Platform.FileKey(),
 		WSL:           x.plan.Platform.WSL,
 		HarnessData:   x.opts.HarnessData,
@@ -469,7 +473,7 @@ func (x *executor) restoreClaude() {
 	}
 
 	x.progress(Event{ID: "claude-code", Phase: "plugins and MCP"})
-	notes, errs := ai.RestoreClaude(x.ctx, x.r, x.plan.Root)
+	notes, errs := ai.RestoreClaude(x.ctx, x.r, x.plan.FilesRoot("claude-code"))
 	x.report.ManualSecrets = append(x.report.ManualSecrets, notes...)
 
 	for _, err := range errs {

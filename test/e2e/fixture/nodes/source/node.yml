@@ -1,0 +1,15 @@
+# check.sh sets last_seen to now, so the node is never stale.
+id: source
+name: source
+system: Ubuntu 24.04
+platform: debian
+file_key: linux
+arch: amd64
+last_seen: 2026-01-01T00:00:00Z
+apps:
+  cowsay: {manager: npm, version: 1.5.0}
+files:
+  zsh:
+    - { src: files/zsh/.zshrc, dest: { linux: ~/.zshrc } }
+  oh-my-zsh:
+    - { src: files/oh-my-zsh/themes/e2e.zsh-theme, dest: { linux: ~/.oh-my-zsh/custom/themes/e2e.zsh-theme } }

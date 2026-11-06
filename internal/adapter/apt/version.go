@@ -30,3 +30,20 @@ func (Apt) InstallVersion(ctx context.Context, r *runner.Runner, s config.Instal
 
 	return err
 }
+
+// HasVersion looks the version up in apt-cache madison; an unreadable index counts as available.
+func (Apt) HasVersion(ctx context.Context, r *runner.Runner, s config.InstallSpec, e lock.Entry) bool {
+	out, err := r.Output(ctx, runner.Cmd{Name: "apt-cache", Args: []string{"madison", "--", s.Apt}})
+
+	if err != nil {
+		return true
+	}
+
+	for _, line := range strings.Split(out, "\n") {
+		if fields := strings.Split(line, "|"); len(fields) > 1 && strings.TrimSpace(fields[1]) == e.Version {
+			return true
+		}
+	}
+
+	return false
+}

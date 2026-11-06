@@ -45,10 +45,6 @@ func (c *Config) Validate() []error {
 			}
 		}
 
-		if a.Files != "" && c.Files[a.Files] == nil {
-			errs = append(errs, fmt.Errorf("%s: unknown files group %q", a.ID, a.Files))
-		}
-
 		for key, s := range a.Install {
 			if s.Repo != "" && c.AptRepos[s.Repo].Source == "" {
 				errs = append(errs, fmt.Errorf("%s.%s: unknown apt repo %q", a.ID, key, s.Repo))

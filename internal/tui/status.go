@@ -139,7 +139,7 @@ func (m *statusBrowser) items() []status.Item {
 	return items
 }
 
-func (m *statusBrowser) pageSize() int { return max(1, m.height-8) }
+func (m *statusBrowser) pageSize() int { return max(1, m.height-9) }
 
 func (m *statusBrowser) detailLines() []string {
 	items := m.items()
@@ -165,6 +165,7 @@ func (m *statusBrowser) View() tea.View {
 	lines := []string{
 		titleStyle.Render(statusClip("rehome status", m.width)),
 		dimStyle.Render(statusClip("Config source: "+m.report.SourceLabel(), m.width)),
+		dimStyle.Render(statusClip("This node: "+m.report.NodeLabel(), m.width)),
 		"",
 		groupStyle.Render(statusClip(fmt.Sprintf("%s (%d) · category %d/%d", section.Title, section.Count, m.category+1, len(m.sections)), m.width)),
 	}

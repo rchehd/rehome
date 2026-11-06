@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/rchehd/rehome/internal/app"
+	"github.com/rchehd/rehome/internal/config"
 	"github.com/rchehd/rehome/internal/runner"
 )
 
@@ -17,7 +18,6 @@ var Version = "dev"
 
 type globalFlags struct {
 	config       string
-	lock         string
 	json         bool
 	dryRun       bool
 	verbose      bool
@@ -41,6 +41,7 @@ func newRoot() *cobra.Command {
 	root := &cobra.Command{
 		Use:           "rehome",
 		Short:         "Move your workstation to a new machine",
+		Version:       Version,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -53,9 +54,9 @@ func newRoot() *cobra.Command {
 	}
 
 	root.SetOut(os.Stdout)
+	root.SetVersionTemplate("rehome {{.Version}}\n")
 	pf := root.PersistentFlags()
 	pf.StringVar(&flags.config, "config", "", "config file path or URL")
-	pf.StringVar(&flags.lock, "lock", "", "lock file path (default: rehome.lock next to the config)")
 	pf.BoolVar(&flags.json, "json", false, "print machine-readable JSON (for scripts and agents)")
 	pf.BoolVar(&flags.dryRun, "dry-run", false, "print what would be done without changing anything")
 	pf.BoolVarP(&flags.verbose, "verbose", "v", false, "print every command")
@@ -63,7 +64,7 @@ func newRoot() *cobra.Command {
 	pf.BoolVar(&flags.sessions, "sessions", false, "include local Claude Code, Codex and Cursor CLI sessions")
 	pf.StringToStringVar(&flags.sessionPaths, "session-path-map", nil, "map original project paths to new absolute paths (old=new)")
 
-	root.AddCommand(newVersionCmd(), newUpdateCmd(), newScanCmd(), newInstallCmd(), newSyncCmd(), newStatusCmd(), newConfigCmd(), newMCPCmd(), newLinkCmd(), newPushCmd(), newPullCmd(), newDebugCmd())
+	root.AddCommand(newVersionCmd(), newUpdateCmd(), newScanCmd(), newInstallCmd(), newSyncCmd(), newStatusCmd(), newConfigCmd(), newMCPCmd(), newLinkCmd(), newMigrateCmd(), newNodesCmd(), newRemoveCmd(), newPushCmd(), newPullCmd(), newDebugCmd())
 
 	return root
 }
@@ -79,7 +80,7 @@ func newVersionCmd() *cobra.Command {
 }
 
 func opts(cmd *cobra.Command) app.Options {
-	return app.Options{Config: flags.config, Lock: flags.lock, Runner: newRunner(), Log: cmd.ErrOrStderr(), HarnessData: flags.harnessData, Sessions: flags.sessions, SessionPaths: flags.sessionPaths}
+	return app.Options{Config: flags.config, Version: Version, Runner: newRunner(), Log: cmd.ErrOrStderr(), HarnessData: flags.harnessData, Sessions: flags.sessions, SessionPaths: flags.sessionPaths}
 }
 
 // report prints v as JSON under --json, otherwise the text.
@@ -102,7 +103,20 @@ func newRunner() *runner.Runner {
 
 // Execute runs the CLI and returns the process exit code.
 func Execute() int {
-	err := newRoot().Execute()
+	root := newRoot()
+	err := root.Execute()
+
+	if errors.Is(err, config.ErrNeedsMigration) && interactive() && !flags.json {
+		fmt.Fprintln(os.Stderr, "This config uses the previous format.")
+
+		if ask(root, "Migrate it now? [Y/n]", "y") == "y" {
+			if err = runMigrate(root); err == nil {
+				fmt.Fprintln(os.Stderr, "Done; run the command again.")
+
+				return 0
+			}
+		}
+	}
 
 	if err == nil {
 		return 0

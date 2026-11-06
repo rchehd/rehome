@@ -10,7 +10,7 @@ import (
 func editFixture(t *testing.T) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), FileName)
-	body := "version: 1\napps:\n  - id: htop # keep this\n    group: tools\n    install:\n      debian: {apt: htop}\n"
+	body := "version: 2\napps:\n  - id: htop # keep this\n    group: tools\n    install:\n      debian: {apt: htop}\n"
 
 	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
 		t.Fatal(err)

@@ -15,6 +15,7 @@ var (
 		"installed": lipgloss.NewStyle().Foreground(lipgloss.Color("10")),
 		"n/a":       lipgloss.NewStyle().Foreground(lipgloss.Color("8")),
 		"disabled":  lipgloss.NewStyle().Foreground(lipgloss.Color("8")),
+		"skipped":   lipgloss.NewStyle().Foreground(lipgloss.Color("8")),
 	}
 )
 

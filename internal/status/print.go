@@ -19,18 +19,39 @@ func (s *Status) SourceLabel() string {
 		return "local config edits to publish (rehome push)"
 	case gitsync.SourceChanged:
 		return "updates available (rehome sync)"
+	case gitsync.SourceLocal:
+		return "folder, written in place"
 	case gitsync.SourceUnknown:
-		return "could not check the linked Git branch"
+		return "could not check the config source"
 	default:
 		return "local comparison"
 	}
 }
 
+// NodeLabel says whether this machine's node matches the system and the shared config.
+func (s *Status) NodeLabel() string {
+	var parts []string
+	switch {
+	case s.Node.Unscanned && s.ScanChanges() == 0:
+		parts = append(parts, "never scanned (rehome scan)")
+	case s.Node.Unscanned:
+		parts = append(parts, fmt.Sprintf("not scanned: %d differences from the system (rehome scan)", s.ScanChanges()))
+	}
+	if s.Node.Unpublished {
+		parts = append(parts, "unpublished node changes (rehome push)")
+	}
+	if len(parts) == 0 {
+		parts = append(parts, "up to date")
+	}
+	return s.Node.Name + ": " + strings.Join(parts, " · ")
+}
+
 func (s *Status) printHeader(w io.Writer) {
 	fmt.Fprintln(w, "rehome status")
 	fmt.Fprintf(w, "  Config source  %s\n", s.SourceLabel())
+	fmt.Fprintf(w, "  This node      %s\n", s.NodeLabel())
 	state := "changes to review"
-	if len(s.Missing)+len(s.New)+len(s.ChangedFiles)+len(s.Behind)+len(s.NotSynced) == 0 {
+	if len(s.Missing)+len(s.New)+len(s.ChangedFiles)+len(s.Behind)+len(s.NotSynced)+len(s.Gone) == 0 {
 		state = "in sync with the local config"
 	}
 	fmt.Fprintf(w, "  System         %s\n\n", state)
@@ -105,7 +126,7 @@ func (s *Status) PrintDetails(w io.Writer) {
 }
 
 func (s *Status) printActions(w io.Writer) {
-	localChanges := len(s.New)+len(s.NotSynced) > 0
+	localChanges := len(s.New)+len(s.NotSynced)+len(s.Gone) > 0
 	savedSessions := false
 	for _, path := range s.ChangedFiles {
 		if strings.HasPrefix(path, "session missing: ") {

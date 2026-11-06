@@ -181,3 +181,9 @@ func defaultNode() string {
 
 	return strings.TrimPrefix(strings.TrimSpace(string(data)), "v")
 }
+
+func (Npm) Remove(ctx context.Context, r *runner.Runner, s config.InstallSpec) error {
+	_, err := r.Run(ctx, runner.Cmd{Shell: SourceNvm + "npm uninstall -g -- " + runner.Quote(s.Npm)})
+
+	return err
+}

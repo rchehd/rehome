@@ -4,7 +4,7 @@ set -Eeuo pipefail
 rehome="$1"
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
-trap 'echo "Session E2E failed at line $LINENO" >&2' ERR
+trap 'echo "Session E2E failed at line $LINENO" >&2; tail -n 25 "$work"/*.log >&2 2>/dev/null' ERR
 
 export HOME="$work/source" XDG_CONFIG_HOME="$work/config" XDG_STATE_HOME="$work/state"
 export CURSOR_CONFIG_DIR="$HOME/.cursor"
@@ -13,6 +13,12 @@ id=11111111-1111-4111-8111-111111111111
 workspace=4f2a9deaa47bd4c1d6e8f804c161a77a
 cursor="$HOME/.cursor/chats/$workspace/$id"
 mkdir -p "$HOME/.claude/projects/source-project" "$HOME/.codex/sessions/2026/11/05" "$cursor" "$work/bin" "$work/scanned"
+# rehome reads settings from os.UserConfigDir: XDG on Linux, ~/Library/Application Support on macOS.
+settings="$XDG_CONFIG_HOME/rehome"
+[[ "$(uname)" == Darwin ]] && settings="$HOME/Library/Application Support/rehome"
+mkdir -p "$settings"
+printf 'node_id: source\nnode_name: source\n' > "$settings/settings.yml"
+captured="$work/scanned/nodes/source/files"
 if command -v dpkg-query >/dev/null; then
   ln -s "$(command -v dpkg-query)" "$work/bin/dpkg-query"
 fi
@@ -38,28 +44,32 @@ mkdir -p "$HOME/.cursor/acp-sessions/$id"
 cp "$cursor/store.db" "$cursor/meta.json" "$HOME/.cursor/acp-sessions/$id/"
 
 PATH="$work/bin" "$rehome" scan --yes --json --config "$work/scanned" > "$work/default.json"
-[[ ! -e "$work/scanned/files/claude-code-sessions" && ! -e "$work/scanned/files/cursor-sessions" ]]
+[[ ! -e "$captured/claude-code-sessions" && ! -e "$captured/cursor-sessions" ]]
 PATH="$work/bin" "$rehome" scan --sessions --yes --json --config "$work/scanned" > "$work/scan.json"
 for kind in claude-code codex cursor; do
-  [[ -d "$work/scanned/files/$kind-sessions" ]]
+  [[ -d "$captured/$kind-sessions" ]]
 done
 if grep -rq 'sk-ant-abcdefghijklmnopqrstuvwxyz' "$work/scanned"; then
   echo "Session capture kept a secret" >&2
   exit 1
 fi
 
-export HOME="$work/target" XDG_CONFIG_HOME="$work/target-config" XDG_STATE_HOME="$work/target-state"
-export CURSOR_CONFIG_DIR="$HOME/.cursor"
-mkdir -p "$HOME"
-PATH="$work/bin" "$rehome" sync --yes --offline --config "$work/scanned" > "$work/default-restore.log"
-[[ ! -e "$HOME/.claude/projects" && ! -e "$HOME/.cursor/chats" ]]
-if PATH="$work/bin" "$rehome" status --sessions --session-path-map "/rehome-session-project=$work/target-project" --json --config "$work/scanned" > "$work/status.json"; then
+# Status compares this machine with its own node: a recorded session missing here is reported.
+mv "$HOME/.claude/projects" "$work/held-projects"
+if PATH="$work/bin" "$rehome" status --sessions --json --config "$work/scanned" > "$work/status.json"; then
   echo "Status did not report missing sessions" >&2
   exit 1
 else
   [[ "$?" == 1 ]]
 fi
 grep -q 'session missing:' "$work/status.json"
+mv "$work/held-projects" "$HOME/.claude/projects"
+
+export HOME="$work/target" XDG_CONFIG_HOME="$work/target-config" XDG_STATE_HOME="$work/target-state"
+export CURSOR_CONFIG_DIR="$HOME/.cursor"
+mkdir -p "$HOME"
+PATH="$work/bin" "$rehome" sync --yes --offline --config "$work/scanned" > "$work/default-restore.log"
+[[ ! -e "$HOME/.claude/projects" && ! -e "$HOME/.cursor/chats" ]]
 PATH="$work/bin" "$rehome" sync --sessions --session-path-map "/rehome-session-project=$work/target-project" --yes --offline --config "$work/scanned" > "$work/restore.log"
 claude_session="$(find "$HOME/.claude/projects" -name "$id.jsonl")"
 codex_session="$(find "$HOME/.codex/sessions" -name "*$id.jsonl")"
