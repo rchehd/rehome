@@ -42,6 +42,8 @@ var tabs = []tab{
 	{"conflicts", func(p *install.Plan, s install.Step) bool { return len(p.Conflicts[s.App.ID]) > 1 }},
 }
 
+const tabMissing = 1
+
 type item struct {
 	step    install.Step
 	checked bool
@@ -71,6 +73,8 @@ type checklist struct {
 	done      bool
 	cancelled bool
 	recipe    string
+	// hint says why the last key did nothing; the next key clears it.
+	hint string
 }
 
 // ChecklistOptions name the node the plan comes from; Back lets esc return to the node list.
@@ -93,9 +97,9 @@ type ChecklistResult struct {
 	Tab       int
 }
 
-// Checklist lets the user pick what to install; missing apps start checked. ok is false when cancelled.
+// Checklist lets the user pick what to install; nothing starts checked. ok is false when cancelled.
 func Checklist(plan *install.Plan, opts ChecklistOptions) (ChecklistResult, bool, error) {
-	m := &checklist{plan: plan, opts: opts, height: 20}
+	m := &checklist{plan: plan, opts: opts, height: 20, tab: tabMissing}
 	seen := map[string]bool{}
 
 	for _, s := range plan.Steps {
@@ -103,10 +107,7 @@ func Checklist(plan *install.Plan, opts ChecklistOptions) (ChecklistResult, bool
 			continue
 		}
 
-		// Installed apps with settings start checked so new files from the config still arrive.
-		checked := s.Status == install.StatusInstall || s.Status == install.StatusFilesOnly ||
-			(s.Status == install.StatusInstalled && s.App.Files != "")
-		it := &item{step: s, checked: checked}
+		it := &item{step: s}
 
 		if p := opts.Prior; p != nil {
 			id := s.App.ID
@@ -193,7 +194,7 @@ func (m *checklist) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.height = max(5, msg.Height-9)
 	case tea.KeyPressMsg:
-		if m.filtering {
+		if m.filtering && msg.String() != "ctrl+c" {
 			m.updateFilter(msg.String())
 
 			return m, nil
@@ -207,6 +208,7 @@ func (m *checklist) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m *checklist) updateKey(key string) tea.Cmd {
 	rows := m.rows()
+	m.hint = ""
 
 	switch key {
 	case "ctrl+c", "q":
@@ -257,9 +259,13 @@ func (m *checklist) updateKey(key string) tea.Cmd {
 		if m.cursor < len(rows) {
 			m.toggleGroup(rows[m.cursor].group)
 		}
+	case "A":
+		m.toggleMissing()
 	case "v":
 		if it := m.current(rows); it != nil && it.step.Pin != (lock.Entry{}) {
 			it.latest = !it.latest
+		} else if it != nil {
+			m.hint = versionHint(it.step)
 		}
 	case "n":
 		if it := m.current(rows); it != nil && len(m.plan.Conflicts[it.step.App.ID]) > 1 {
@@ -270,6 +276,8 @@ func (m *checklist) updateKey(key string) tea.Cmd {
 	case "s":
 		if it := m.current(rows); it != nil && m.hasSettings(it) {
 			it.noSettings = !it.noSettings
+		} else if it != nil {
+			m.hint = settingsHint(it)
 		}
 	case "u":
 		if it := m.current(rows); it != nil && it.step.Upgrade != (lock.Entry{}) {
@@ -329,6 +337,27 @@ func (m *checklist) toggleGroup(group string) {
 	}
 
 	for _, it := range members {
+		it.checked = check
+	}
+}
+
+// toggleMissing checks every visible app that is missing here, or unchecks them when all are checked.
+func (m *checklist) toggleMissing() {
+	var missing []*item
+
+	for _, it := range m.items {
+		if m.matches(it) && (it.step.Status == install.StatusInstall || it.step.Status == install.StatusFilesOnly) {
+			missing = append(missing, it)
+		}
+	}
+
+	check := false
+
+	for _, it := range missing {
+		check = check || !it.checked
+	}
+
+	for _, it := range missing {
 		it.checked = check
 	}
 }
@@ -408,6 +437,28 @@ func (m *checklist) note(it *item) string {
 	return strings.Join(parts, " · ")
 }
 
+func versionHint(s install.Step) string {
+	switch {
+	case s.Status == install.StatusInstalled:
+		return "v: already installed"
+	case s.PinNote != "":
+		return "v: only the latest can be installed (" + s.PinNote + ")"
+	}
+
+	return "v: no node recorded a version"
+}
+
+func settingsHint(it *item) string {
+	switch {
+	case !selectable(it):
+		return "s: it cannot be installed here"
+	case it.step.Status == install.StatusFilesOnly:
+		return "s: it brings only settings"
+	}
+
+	return "s: no settings recorded"
+}
+
 func (m *checklist) View() tea.View {
 	var b strings.Builder
 	rows := m.rows()
@@ -454,6 +505,10 @@ func (m *checklist) View() tea.View {
 		note = m.note(it)
 	}
 
+	if m.hint != "" {
+		note = m.hint
+	}
+
 	back := "q quit"
 
 	if m.opts.Back {
@@ -461,8 +516,13 @@ func (m *checklist) View() tea.View {
 	}
 
 	b.WriteString(dimStyle.Render(note) + "\n")
-	b.WriteString(helpStyle.Render("↑/↓ move · space toggle · a group · tab filter · / search · enter continue · "+back) + "\n")
-	b.WriteString(helpStyle.Render("v same/latest · s settings · n other node · u upgrade · r add recipe"))
+
+	if m.filtering {
+		b.WriteString(helpStyle.Render("type to search · enter apply · esc clear · ctrl+c quit"))
+	} else {
+		b.WriteString(helpStyle.Render("↑/↓ move · space toggle · a group · A all missing · tab filter · / search · enter continue · "+back) + "\n")
+		b.WriteString(helpStyle.Render("v same/latest · s settings · n other node · u upgrade · r add recipe"))
+	}
 	v := tea.NewView(b.String())
 	v.AltScreen = true
 
@@ -534,8 +594,10 @@ func (m *checklist) renderRow(r row) string {
 		detail = detail[:57] + "…"
 	}
 
-	return fmt.Sprintf("  %s %-32s %s %-14s %s", box, s.App.ID, statusStyles[label].Render(fmt.Sprintf("%-9s", label)), versionLabel(r.item), dimStyle.Render(detail))
+	return fmt.Sprintf("  %s %-32s %s %-*s %s", box, s.App.ID, statusStyles[label].Render(fmt.Sprintf("%-9s", label)), versionWidth, clip(versionLabel(r.item), versionWidth), dimStyle.Render(detail))
 }
+
+const versionWidth = 14
 
 // versionLabel shows what will be installed: @pin, latest, or ↑ an available upgrade.
 func versionLabel(it *item) string {

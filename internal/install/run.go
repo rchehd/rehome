@@ -473,7 +473,7 @@ func (x *executor) restoreClaude() {
 	}
 
 	x.progress(Event{ID: "claude-code", Phase: "plugins and MCP"})
-	notes, errs := ai.RestoreClaude(x.ctx, x.r, x.plan.FilesRoot("claude-code"))
+	notes, errs := ai.RestoreClaude(x.ctx, x.r, x.plan.FilesRoot("claude-code"), func(s string) { x.progress(Event{Phase: s}) })
 	x.report.ManualSecrets = append(x.report.ManualSecrets, notes...)
 
 	for _, err := range errs {

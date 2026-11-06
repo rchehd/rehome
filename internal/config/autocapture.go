@@ -20,6 +20,8 @@ var autoExcludes = []string{
 	"**/LOCK", "**/LOG", "**/LOG.*", "**/*.LOG", "**/*.LOCK",
 	"**/buddy-tokens.json", "**/ant-device-registry.json", "**/ant-did", "**/ccd-ids.json",
 	"**/credentials/**", "**/*_key.key", "**/*-key.pem", "**/cakey.pem", "**/*.key",
+	"**/.cache/**", "**/*-cache/**", "**/*_cache/**", "**/*Cache/**", "**/session-state/**", "**/*.jsonl",
+	"**/git-shadow/**",
 }
 
 func AutoExcludes() []string {

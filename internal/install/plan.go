@@ -12,6 +12,7 @@ import (
 	"github.com/rchehd/rehome/internal/config"
 	"github.com/rchehd/rehome/internal/lock"
 	"github.com/rchehd/rehome/internal/platform"
+	"github.com/rchehd/rehome/internal/progress"
 	"github.com/rchehd/rehome/internal/resolve"
 	"github.com/rchehd/rehome/internal/runner"
 )
@@ -99,11 +100,12 @@ func Build(ctx context.Context, r *runner.Runner, cfg *config.Config, root strin
 
 	plan := &Plan{Config: cfg, Root: root, Platform: p, Lock: lk, Mode: sel.Mode, Reinstall: sel.All, Offline: sel.Offline}
 	res := newResolver(r, p, sel.Offline)
+	apps := slices.DeleteFunc(slices.Clone(cfg.Apps), func(a config.App) bool {
+		return sel.IDs != nil && !slices.Contains(sel.IDs, a.ID)
+	})
 
-	for _, app := range cfg.Apps {
-		if sel.IDs != nil && !slices.Contains(sel.IDs, app.ID) {
-			continue
-		}
+	for i, app := range apps {
+		progress.Step(ctx, "checking %s (%d/%d)", app.ID, i+1, len(apps))
 
 		if slices.Contains(sel.NoSettings, app.ID) {
 			app.Files = ""

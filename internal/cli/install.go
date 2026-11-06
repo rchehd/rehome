@@ -196,8 +196,12 @@ func confirmAndRun(cmd *cobra.Command, plan *install.Plan, options install.Optio
 
 // installPicker: the nodes, then the chosen node's apps, then the summary and the run. esc in the
 // checklist goes back to the nodes; a recipe added from it, or an app taken from another node,
-// rebuilds the plan and reopens it.
+// rebuilds the plan and reopens it. Versions default to same; v in the checklist picks latest.
 func installPicker(cmd *cobra.Command, req app.InstallRequest, sel install.Selection, f installFlags, options install.Options) (*app.InstallInput, *install.Report, error) {
+	if f.version == "" {
+		f.version = install.ModeSame
+	}
+
 nodes:
 	for {
 		rows, err := nodeRows(cmd)
