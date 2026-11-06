@@ -13,6 +13,7 @@ import (
 	"github.com/rchehd/rehome/internal/discover"
 	"github.com/rchehd/rehome/internal/files"
 	"github.com/rchehd/rehome/internal/progress"
+	"github.com/rchehd/rehome/internal/secrets"
 )
 
 // captureByRules takes settings of apps the catalog does not cover: the config's own or
@@ -60,6 +61,10 @@ func (s *scanner) captureByRules() {
 			continue
 		}
 
+		if rules[key].Origin == config.OriginAuto {
+			changes, fileMaps = s.withoutPrivateKeys(changes, fileMaps)
+		}
+
 		if len(fileMaps) == 0 {
 			continue
 		}
@@ -74,6 +79,28 @@ func (s *scanner) captureByRules() {
 		app.Files = id
 		s.addChanges(changes)
 	}
+}
+
+// withoutPrivateKeys leaves out files an auto rule found with a private key in them and asks the user about each.
+func (s *scanner) withoutPrivateKeys(changes []files.Change, fileMaps []config.FileMap) ([]files.Change, []config.FileMap) {
+	var kept []files.Change
+
+	for _, c := range changes {
+		if !slices.ContainsFunc(c.Findings, func(f secrets.Finding) bool { return f.Key == secrets.PrivateKeyFinding }) {
+			kept = append(kept, c)
+
+			continue
+		}
+
+		fileMaps = slices.DeleteFunc(fileMaps, func(m config.FileMap) bool { return m.Src == c.Dst })
+		s.res.Attention = append(s.res.Attention, discover.Warning{
+			Path:   adapter.Tilde(c.Src),
+			Reason: "holds a private key, not copied",
+			Action: "keep the key in Bitwarden or copy it by hand",
+		})
+	}
+
+	return kept, fileMaps
 }
 
 func (s *scanner) names(app *config.App) []string {

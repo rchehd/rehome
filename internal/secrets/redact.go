@@ -11,6 +11,9 @@ const Placeholder = "<rehome:redacted>"
 
 const minSecretLen = 6
 
+// PrivateKeyFinding is the Finding key of a redacted private key block.
+const PrivateKeyFinding = "private key"
+
 type Finding struct {
 	Path string `json:"path"`
 	Key  string `json:"key"`
@@ -48,7 +51,7 @@ func Redact(path string, data []byte) ([]byte, []Finding) {
 
 	var findings []Finding
 	text := privateKey.ReplaceAllStringFunc(string(data), func(string) string {
-		findings = append(findings, Finding{Path: path, Key: "private key"})
+		findings = append(findings, Finding{Path: path, Key: PrivateKeyFinding})
 
 		return Placeholder
 	})
