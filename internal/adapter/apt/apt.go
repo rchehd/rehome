@@ -56,6 +56,12 @@ func (Apt) Scan(ctx context.Context, r *runner.Runner) ([]adapter.Detected, erro
 		return nil, err
 	}
 
+	pkgs, err = dropDataPackages(ctx, r, pkgs)
+
+	if err != nil {
+		return nil, err
+	}
+
 	origins, err := Origins(ctx, r, pkgs)
 
 	if err != nil {
