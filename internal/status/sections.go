@@ -25,8 +25,12 @@ func (s *Status) Sections() []Section {
 		{Key: "files", Title: "Changed files", Action: "review; scan to save / sync to apply", Count: len(s.ChangedFiles)},
 		{Key: "new", Title: "Local apps", Action: "rehome scan", Count: len(s.New)},
 		{Key: "versions", Title: "Local versions", Action: "rehome scan", Count: len(s.NotSynced)},
+		{Key: "gone", Title: "Gone from this node", Action: "rehome scan", Count: len(s.Gone)},
 		{Key: "attention", Title: "Needs attention", Action: "review details", Count: len(s.Attention)},
 		{Key: "unavailable", Title: "Unavailable", Action: "no installer for this OS", Count: len(s.Unsupported)},
+	}
+	for _, id := range s.Gone {
+		sections[5].Items = append(sections[5].Items, Item{Name: id, Installed: "not found", Recorded: versionText(s.Versions[id].Recorded, "recorded"), Detail: []string{"This node still records it; rehome scan drops it, rehome install " + id + " brings it back."}})
 	}
 	for _, id := range s.Missing {
 		v := s.Versions[id]
@@ -75,10 +79,10 @@ func (s *Status) Sections() []Section {
 		if name == "" {
 			name = warning.Path
 		}
-		sections[5].Items = append(sections[5].Items, Item{Name: name, Detail: []string{warning.Path, warning.Reason, warning.Action}})
+		sections[6].Items = append(sections[6].Items, Item{Name: name, Detail: []string{warning.Path, warning.Reason, warning.Action}})
 	}
 	for _, id := range s.Unsupported {
-		sections[6].Items = append(sections[6].Items, Item{Name: id, Installed: "unavailable"})
+		sections[7].Items = append(sections[7].Items, Item{Name: id, Installed: "unavailable"})
 	}
 	return sections
 }

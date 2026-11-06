@@ -21,6 +21,8 @@ type Source interface {
 	Pull(ctx context.Context) error
 	Publish(ctx context.Context, message string) error
 	Status(ctx context.Context) Status
+	// Unpublished reports whether rel (a path under Dir) changed since it was last published.
+	Unpublished(ctx context.Context, rel string) bool
 	// Backup keeps a copy of the current config before a migration and says where.
 	Backup(ctx context.Context) (string, error)
 }

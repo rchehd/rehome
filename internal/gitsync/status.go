@@ -20,6 +20,20 @@ const (
 	SourceLocal SourceStatus = "local_folder"
 )
 
+// Unpublished reports uncommitted changes under rel, or commits touching it that the upstream lacks.
+// It reads only the last fetched upstream, so it works offline.
+func Unpublished(ctx context.Context, path, rel string) bool {
+	for _, args := range [][]string{{"status", "--porcelain", "--", rel}, {"log", "--oneline", "@{upstream}..HEAD", "--", rel}} {
+		out, err := exec.CommandContext(ctx, "git", append([]string{"-C", path}, args...)...).Output()
+
+		if err == nil && len(strings.TrimSpace(string(out))) > 0 {
+			return true
+		}
+	}
+
+	return false
+}
+
 func RemoteStatus(ctx context.Context, path string) SourceStatus {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()

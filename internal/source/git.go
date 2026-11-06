@@ -38,6 +38,10 @@ func (g *Git) Status(ctx context.Context) Status {
 	return gitsync.RemoteStatus(ctx, g.Path)
 }
 
+func (g *Git) Unpublished(ctx context.Context, rel string) bool {
+	return gitsync.Unpublished(ctx, g.Path, rel)
+}
+
 // Backup needs no copy: the migration is one commit that git revert undoes.
 func (g *Git) Backup(context.Context) (string, error) {
 	return "git history (git revert undoes the migration commit)", nil

@@ -193,14 +193,27 @@ func (a *Archive) Status(ctx context.Context) Status {
 		return gitsync.SourceChanged
 	}
 
-	info, err := os.Stat(filepath.Join(a.Path, marker))
-
-	if err != nil {
+	if a.changedSince(".") {
 		return gitsync.SourceDirty
 	}
 
+	return gitsync.SourceCurrent
+}
+
+func (a *Archive) Unpublished(_ context.Context, rel string) bool {
+	return a.changedSince(rel)
+}
+
+// changedSince reports whether a file under rel is newer than the last pull or publish.
+func (a *Archive) changedSince(rel string) bool {
+	info, err := os.Stat(filepath.Join(a.Path, marker))
+
+	if err != nil {
+		return true
+	}
+
 	changed := false
-	_ = filepath.WalkDir(a.Path, func(p string, d fs.DirEntry, err error) error {
+	_ = filepath.WalkDir(filepath.Join(a.Path, rel), func(p string, d fs.DirEntry, err error) error {
 		if err != nil || changed {
 			return err
 		}
@@ -212,11 +225,7 @@ func (a *Archive) Status(ctx context.Context) Status {
 		return nil
 	})
 
-	if changed {
-		return gitsync.SourceDirty
-	}
-
-	return gitsync.SourceCurrent
+	return changed
 }
 
 func (a *Archive) Backup(ctx context.Context) (string, error) {

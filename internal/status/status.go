@@ -3,6 +3,9 @@ package status
 import (
 	"context"
 	"fmt"
+	"maps"
+	"slices"
+	"strings"
 
 	"github.com/rchehd/rehome/internal/catalog"
 	"github.com/rchehd/rehome/internal/config"
@@ -23,8 +26,18 @@ type AppVersions struct {
 	Pinned    string     `json:"pinned,omitempty"`
 }
 
+// NodeState compares this machine's node with the system and with the shared config.
+type NodeState struct {
+	Name string `json:"name"`
+	// Unscanned: the system differs from the local node.yml; rehome scan records it.
+	Unscanned bool `json:"unscanned"`
+	// Unpublished: the local node differs from the shared config; rehome push shares it.
+	Unpublished bool `json:"unpublished"`
+}
+
 type Status struct {
 	Source   gitsync.SourceStatus   `json:"source_status,omitempty"`
+	Node     NodeState              `json:"node"`
 	Versions map[string]AppVersions `json:"versions,omitempty"`
 	// Missing are enabled config apps not installed here.
 	Missing        []string           `json:"missing"`
@@ -38,13 +51,29 @@ type Status struct {
 	Behind []string `json:"behind_lock"`
 	// NotSynced are versions changed here that the next scan would record in this node.
 	NotSynced []string `json:"not_in_lock"`
+	// Gone are apps this node recorded that are no longer installed.
+	Gone []string `json:"gone_from_node"`
 	// Unsupported have no installer for this OS; informational, not a difference.
 	Unsupported []string `json:"unsupported"`
 }
 
 func (s *Status) Clean() bool {
 	return (s.Source == "" || s.Source == gitsync.SourceCurrent || s.Source == gitsync.SourceLocal) &&
-		len(s.Missing)+len(s.New)+len(s.ChangedFiles)+len(s.Behind)+len(s.NotSynced) == 0
+		len(s.Missing)+len(s.New)+len(s.ChangedFiles)+len(s.Behind)+len(s.NotSynced)+len(s.Gone) == 0 &&
+		!s.Node.Unscanned && !s.Node.Unpublished
+}
+
+// ScanChanges counts the differences rehome scan would record in this node.
+func (s *Status) ScanChanges() int {
+	n := len(s.New) + len(s.NotSynced) + len(s.Gone)
+
+	for _, path := range s.ChangedFiles {
+		if !strings.HasPrefix(path, "session missing: ") {
+			n++
+		}
+	}
+
+	return n
 }
 
 // Compute compares the config with the system in both directions without writing anything.
@@ -86,6 +115,12 @@ func Compute(ctx context.Context, r *runner.Runner, cfg *config.Config, existing
 
 	for _, a := range res.Config.Apps {
 		found[a.ID] = true
+	}
+
+	for _, id := range slices.Sorted(maps.Keys(local.Apps)) {
+		if _, ok := local.Get(id, p.Key()); ok && !found[id] {
+			st.Gone = append(st.Gone, id)
+		}
 	}
 
 	progress.Step(ctx, "checking versions")

@@ -3,11 +3,13 @@ package cli
 import (
 	"context"
 	"errors"
+	"path/filepath"
 
 	"github.com/spf13/cobra"
 
 	"github.com/rchehd/rehome/internal/app"
 	"github.com/rchehd/rehome/internal/config"
+	"github.com/rchehd/rehome/internal/node"
 	"github.com/rchehd/rehome/internal/progress"
 	"github.com/rchehd/rehome/internal/source"
 	"github.com/rchehd/rehome/internal/status"
@@ -76,7 +78,9 @@ func computeStatus(ctx context.Context, o app.Options) (*status.Status, error) {
 
 	if s.Linked() {
 		progress.Step(ctx, "checking the config repo")
-		st.Source = source.Open(s, false, nil).Status(ctx)
+		src := source.Open(s, false, nil)
+		st.Source = src.Status(ctx)
+		st.Node.Unpublished = src.Unpublished(ctx, filepath.Join(node.Dir, st.Node.Name))
 	}
 
 	return st, nil

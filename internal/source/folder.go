@@ -28,6 +28,10 @@ func (f *Folder) Status(context.Context) Status {
 	return gitsync.SourceLocal
 }
 
+func (f *Folder) Unpublished(context.Context, string) bool {
+	return false
+}
+
 func (f *Folder) Backup(context.Context) (string, error) {
 	dir := backupDir(f.Path)
 

@@ -32,5 +32,13 @@ func Status(ctx context.Context, o Options) (*status.Status, error) {
 
 	options := scan.Options{HarnessData: o.HarnessData, Sessions: o.Sessions, SessionPaths: o.SessionPaths, FilesRoot: w.Self.Path}
 
-	return status.Compute(ctx, o.Runner, cfg, existing, w.Root, w.Platform, cat, node.Versions(w.Live()), w.Self.Lock(), options)
+	st, err := status.Compute(ctx, o.Runner, cfg, existing, w.Root, w.Platform, cat, node.Versions(w.Live()), w.Self.Lock(), options)
+
+	if err != nil {
+		return nil, err
+	}
+
+	st.Node = status.NodeState{Name: w.Self.Name, Unscanned: w.Self.LastSeen.IsZero() || st.ScanChanges() > 0}
+
+	return st, nil
 }
