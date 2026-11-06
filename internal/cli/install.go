@@ -87,7 +87,7 @@ func newInstallCmd() *cobra.Command {
 				switch {
 				case flags.json:
 					return installJSON(cmd, plan, options, req)
-				case !f.yes:
+				case !f.yes && !flags.dryRun:
 					rep, err = confirmAndRun(cmd, plan, options)
 				default:
 					printPlan(cmd, plan)
