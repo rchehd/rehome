@@ -14,7 +14,10 @@ import (
 )
 
 // Step moves a config folder from one version to the next; dry only lists the actions.
-type Step func(root string, self *node.Node, dry bool) ([]string, error)
+type Step func(root string, self *node.Node, dry bool, present Present) ([]string, error)
+
+// Present reports whether an app installed by spec is on this machine; nil treats every app as present.
+type Present func(spec config.InstallSpec) bool
 
 // steps[v] upgrades version v to v+1.
 var steps = map[int]Step{1: v1to2}
@@ -49,7 +52,7 @@ func VersionOf(data []byte) (int, error) {
 
 // Run upgrades root to the current version. It works on a copy that replaces root only when
 // every step succeeded, so an interrupted run leaves the old config untouched.
-func Run(root string, self *node.Node, dry bool) ([]string, error) {
+func Run(root string, self *node.Node, dry bool, present Present) ([]string, error) {
 	v, err := Version(root)
 
 	if err != nil || v >= config.CurrentVersion {
@@ -82,7 +85,7 @@ func Run(root string, self *node.Node, dry bool) ([]string, error) {
 		}
 
 		self.Path = node.DirOf(work, filepath.Base(self.Path))
-		actions, err := step(work, self, dry)
+		actions, err := step(work, self, dry, present)
 
 		if err != nil {
 			return nil, fmt.Errorf("migrate v%d to v%d: %w", v, v+1, err)

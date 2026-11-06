@@ -22,6 +22,12 @@ var autoExcludes = []string{
 	"**/credentials/**", "**/*_key.key", "**/*-key.pem", "**/cakey.pem", "**/*.key",
 	"**/.cache/**", "**/*-cache/**", "**/*_cache/**", "**/*Cache/**", "**/session-state/**", "**/*.jsonl",
 	"**/git-shadow/**",
+	// Agent sessions, telemetry and app state rather than settings.
+	"**/*-sessions/**", "**/sentry/**", "**/shared_proto_db/**", "**/spaces-present/**", "**/*-state.json",
+	"**/.state.yaml", "**/project_list.yaml", "**/ca-bundle.pem", "**/.runner_system_id",
+	"**/*.trace", "**/*_trace.txt", "**/nohup.out", "**/blob-store/**", "**/.apm/**", "**/pkg/**",
+	"**/terminus-dependencies-*/**", "**/.terminus/plugins-*/**", "**/File System/**", "**/telemetry/**",
+	"**/intelephense/workspace/**", "**/*.bak", "**/*.bak-*",
 }
 
 func AutoExcludes() []string {

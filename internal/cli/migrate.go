@@ -6,6 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/rchehd/rehome/internal/adapter/all"
 	"github.com/rchehd/rehome/internal/app"
 	"github.com/rchehd/rehome/internal/config"
 	"github.com/rchehd/rehome/internal/migrate"
@@ -77,7 +78,7 @@ func runMigrate(cmd *cobra.Command) error {
 		cmd.Printf("backup: %s\n", where)
 	}
 
-	actions, err := migrate.Run(root, self, flags.dryRun)
+	actions, err := migrate.Run(root, self, flags.dryRun, installedHere(cmd))
 
 	if err != nil {
 		return err
@@ -110,6 +111,23 @@ func runMigrate(cmd *cobra.Command) error {
 	cmd.Printf("migrated to v%d as node %s; run rehome scan to refresh it\n", config.CurrentVersion, self.Name)
 
 	return nil
+}
+
+// installedHere asks the app's package manager whether it is installed on this machine.
+func installedHere(cmd *cobra.Command) migrate.Present {
+	r := newRunner()
+
+	return func(spec config.InstallSpec) bool {
+		a, err := all.ByManager(spec)
+
+		if err != nil {
+			return true
+		}
+
+		installed, err := a.Installed(cmd.Context(), r, spec)
+
+		return err != nil || installed
+	}
 }
 
 // adoptMigration: another machine published its migration first. This one is kept on a branch,

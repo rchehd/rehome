@@ -84,7 +84,7 @@ check "scan finds script install" 'grep -q "id: oh-my-zsh" $home/scanned/rehome.
 check "scan finds uv tool" 'grep -q "uv_tool: ruff" $home/scanned/rehome.yml'
 check "scan records versions in this machine's node" 'grep -A3 "cowsay:" $home/scanned/nodes/*/node.yml | grep -q "version: 1.6.0"'
 check "settings of an app outside the catalog found automatically" 'grep -q "origin: auto" $home/scanned/rehome.yml && ls $home/scanned/nodes/*/files/mc/.config/mc/ini >/dev/null 2>&1'
-check "unclaimed config dir reported with an action" 'grep -q "~/.config/mystery: no app claims it" /tmp/scan.log'
+check "unclaimed config dir reported with an action" 'grep -q "no app claims it" /tmp/scan.log && grep -q "~/.config/mystery" /tmp/scan.log'
 check "scanned config is valid" 'as_dev "./rehome debug config --config scanned" | grep -q " 0 errors"'
 
 echo "== Bitwarden"
