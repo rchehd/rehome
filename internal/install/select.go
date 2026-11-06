@@ -19,6 +19,8 @@ type Request struct {
 	From       *node.Node
 	Prefer     []*node.Node
 	NoSettings bool
+	// Choose takes an app, with its version and settings, from the given node.
+	Choose map[string]*node.Node
 }
 
 // Choice is one app and the node it comes from, or why it is left out.
@@ -37,6 +39,8 @@ type Pick struct {
 	Lock    *lock.Lock
 	// Files is the node whose settings a group takes, or nil for none.
 	Files func(group string) *node.Node
+	// Conflicts are apps several nodes have with different versions or settings, mapped to those nodes.
+	Conflicts map[string][]string
 }
 
 // Select resolves a request against the recipes and the nodes (live ones, self included).
@@ -50,7 +54,16 @@ func Select(cfg *config.Config, nodes []*node.Node, platformKey, fileKey string,
 		recipes[a.ID] = a
 	}
 
-	pick := &Pick{Lock: versions(order, req.Prefer), Files: settingsFrom(order, fileKey, req)}
+	pick := &Pick{Lock: versions(order, req.Prefer), Files: settingsFrom(order, fileKey, req, chosenGroups(recipes, req.Choose)), Conflicts: map[string][]string{}}
+
+	// A chosen node's version applies only on its own platform; otherwise the app takes the latest.
+	for id, n := range req.Choose {
+		delete(pick.Lock.Apps[id], platformKey)
+
+		if e, ok := n.Apps[id]; ok && !e.Unsupported && n.Platform == platformKey && (e.Version != "" || e.Commit != "") {
+			pick.Lock.Set(id, platformKey, e)
+		}
+	}
 
 	if len(req.IDs) > 0 {
 		for _, id := range req.IDs {
@@ -58,13 +71,14 @@ func Select(cfg *config.Config, nodes []*node.Node, platformKey, fileKey string,
 				return nil, unknownApp(id, cfg, nodes)
 			}
 
-			from := owner(order, id)
+			from := pick.source(order, req, id)
 
 			if req.From != nil && from == nil {
 				return nil, fmt.Errorf("node %s does not have %s", req.From.Name, id)
 			}
 
 			pick.take(id, from)
+			pick.conflict(order, recipes[id])
 		}
 
 		return pick, nil
@@ -81,11 +95,60 @@ func Select(cfg *config.Config, nodes []*node.Node, platformKey, fileKey string,
 		case removed(cfg, id) != "":
 			pick.Skipped = append(pick.Skipped, Choice{ID: id, Node: nameOf(owner(order, id)), Reason: removed(cfg, id)})
 		default:
-			pick.take(id, owner(order, id))
+			pick.take(id, pick.source(order, req, id))
+			pick.conflict(order, app)
 		}
 	}
 
 	return pick, nil
+}
+
+// source is the node an app comes from: the chosen one when it has the app, else the first in order.
+func (p *Pick) source(order []*node.Node, req Request, id string) *node.Node {
+	if n := req.Choose[id]; n != nil && owner([]*node.Node{n}, id) != nil {
+		return n
+	}
+
+	return owner(order, id)
+}
+
+// conflict records an app when the nodes that have it differ in version, or several have its settings.
+func (p *Pick) conflict(order []*node.Node, app config.App) {
+	var holders []string
+	versions := map[lock.Entry]bool{}
+	settings := 0
+
+	for _, n := range order {
+		e, ok := n.Apps[app.ID]
+
+		if !ok || e.Unsupported {
+			continue
+		}
+
+		holders = append(holders, n.Name)
+		versions[lock.Entry{Version: e.Version, Commit: e.Commit}] = true
+
+		if _, ok := n.Files[app.Files]; ok && app.Files != "" {
+			settings++
+		}
+	}
+
+	if len(holders) > 1 && (len(versions) > 1 || settings > 1) {
+		p.Conflicts[app.ID] = holders
+	}
+}
+
+// chosenGroups maps the settings group of each chosen app to its node.
+func chosenGroups(recipes map[string]config.App, choose map[string]*node.Node) map[string]*node.Node {
+	groups := map[string]*node.Node{}
+
+	for id, n := range choose {
+		if g := recipes[id].Files; g != "" {
+			groups[g] = n
+		}
+	}
+
+	return groups
 }
 
 func removed(cfg *config.Config, id string) string {
@@ -193,9 +256,9 @@ func versions(order, prefer []*node.Node) *lock.Lock {
 	return lk
 }
 
-// settingsFrom takes a group from --from, else the first preferred node with it, else the most
+// settingsFrom takes a group from --from, else the node chosen for its app, else the first preferred node with it, else the most
 // recently seen node with it, preferring nodes whose settings paths fit this OS.
-func settingsFrom(order []*node.Node, fileKey string, req Request) func(string) *node.Node {
+func settingsFrom(order []*node.Node, fileKey string, req Request, chosen map[string]*node.Node) func(string) *node.Node {
 	return func(group string) *node.Node {
 		has := func(n *node.Node) bool { _, ok := n.Files[group]; return ok }
 
@@ -208,6 +271,8 @@ func settingsFrom(order []*node.Node, fileKey string, req Request) func(string) 
 			}
 
 			return nil
+		case chosen[group] != nil && has(chosen[group]):
+			return chosen[group]
 		}
 
 		for _, n := range req.Prefer {

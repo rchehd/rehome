@@ -83,6 +83,8 @@ type PlanStep struct {
 	PinNote   string `json:"pin_note,omitempty"`
 	Mapped    string `json:"auto_mapped,omitempty"`
 	From      string `json:"from,omitempty"`
+	// Conflict lists the nodes that have the app with different versions or settings.
+	Conflict []string `json:"conflict,omitempty"`
 }
 
 type PlanReport struct {
@@ -125,7 +127,7 @@ func PlanJSON(plan *install.Plan, options Options, req InstallRequest) PlanRepor
 		name, pkg := s.Spec.Manager()
 		r.Steps = append(r.Steps, PlanStep{
 			ID: s.App.ID, Status: s.Status, Manager: name, Package: pkg,
-			Pin: label(s.Pin), Installed: s.Installed, Upgrade: label(s.Upgrade), Reason: s.Reason, Code: s.Code, PinNote: s.PinNote, Mapped: s.Mapped, From: plan.From[s.App.ID],
+			Pin: label(s.Pin), Installed: s.Installed, Upgrade: label(s.Upgrade), Reason: s.Reason, Code: s.Code, PinNote: s.PinNote, Mapped: s.Mapped, From: plan.From[s.App.ID], Conflict: plan.Conflicts[s.App.ID],
 		})
 	}
 

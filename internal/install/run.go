@@ -49,6 +49,9 @@ type Report struct {
 	Upgraded     []Outcome `json:"upgraded"`
 	Upgradable   []Outcome `json:"upgradable"`
 	VersionNotes []string  `json:"version_notes"`
+	// TakenFrom maps each installed app to the node it came from; LeftOut are apps the nodes have that were not planned.
+	TakenFrom map[string]string `json:"taken_from"`
+	LeftOut   []Choice          `json:"left_out"`
 }
 
 type executor struct {
@@ -91,6 +94,7 @@ func Execute(ctx context.Context, r *runner.Runner, plan *Plan, opts Options, pr
 	x.restoreClaude()
 	x.postInstall()
 	x.recordVersions()
+	x.sources()
 
 	return x.report, nil
 }

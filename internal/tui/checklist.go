@@ -26,19 +26,20 @@ var statusLabels = map[string]string{
 
 type tab struct {
 	name  string
-	match func(install.Step) bool
+	match func(*install.Plan, install.Step) bool
 }
 
 var tabs = []tab{
-	{"all", func(install.Step) bool { return true }},
-	{"missing here", func(s install.Step) bool { return s.Status != install.StatusInstalled }},
-	{"can install", func(s install.Step) bool {
+	{"all", func(*install.Plan, install.Step) bool { return true }},
+	{"missing here", func(_ *install.Plan, s install.Step) bool { return s.Status != install.StatusInstalled }},
+	{"can install", func(_ *install.Plan, s install.Step) bool {
 		return s.Status == install.StatusInstall || s.Status == install.StatusFilesOnly
 	}},
-	{"installed", func(s install.Step) bool { return s.Status == install.StatusInstalled }},
-	{"no recipe", func(s install.Step) bool {
+	{"installed", func(_ *install.Plan, s install.Step) bool { return s.Status == install.StatusInstalled }},
+	{"no recipe", func(_ *install.Plan, s install.Step) bool {
 		return s.Code == install.ReasonNoRecipe || (s.Status == statusSkipped && strings.HasPrefix(s.Reason, "no recipe"))
 	}},
+	{"conflicts", func(p *install.Plan, s install.Step) bool { return len(p.Conflicts[s.App.ID]) > 1 }},
 }
 
 type item struct {
@@ -60,6 +61,7 @@ type checklist struct {
 	opts      ChecklistOptions
 	tab       int
 	back      bool
+	switchID  string
 	items     []*item
 	groups    []string
 	cursor    int
@@ -72,18 +74,23 @@ type checklist struct {
 }
 
 // ChecklistOptions name the node the plan comes from; Back lets esc return to the node list.
+// Prior restores an earlier choice and its filter tab, with the cursor on Focus.
 type ChecklistOptions struct {
 	Source string
 	Back   bool
+	Prior  *ChecklistResult
+	Focus  string
 }
 
 // ChecklistResult is the user's choice: the apps to install and upgrade, an app to write a recipe
-// for first, or Back to the node list.
+// for first, an app to take from its next node (Switch), or Back to the node list.
 type ChecklistResult struct {
 	Selection install.Selection
 	Upgrades  []string
 	AddRecipe string
+	Switch    string
 	Back      bool
+	Tab       int
 }
 
 // Checklist lets the user pick what to install; missing apps start checked. ok is false when cancelled.
@@ -100,6 +107,13 @@ func Checklist(plan *install.Plan, opts ChecklistOptions) (ChecklistResult, bool
 		checked := s.Status == install.StatusInstall || s.Status == install.StatusFilesOnly ||
 			(s.Status == install.StatusInstalled && s.App.Files != "")
 		it := &item{step: s, checked: checked}
+
+		if p := opts.Prior; p != nil {
+			id := s.App.ID
+			it.checked, it.latest = slices.Contains(p.Selection.IDs, id), slices.Contains(p.Selection.Latest, id)
+			it.upgrade, it.noSettings = slices.Contains(p.Upgrades, id), slices.Contains(p.Selection.NoSettings, id)
+		}
+
 		m.items = append(m.items, it)
 
 		m.addGroup(groupOf(s), seen)
@@ -109,6 +123,16 @@ func Checklist(plan *install.Plan, opts ChecklistOptions) (ChecklistResult, bool
 		s := install.Step{App: config.App{ID: c.ID}, Status: statusSkipped, Reason: c.Reason}
 		m.items = append(m.items, &item{step: s})
 		m.addGroup(groupOf(s), seen)
+	}
+
+	if opts.Prior != nil {
+		m.tab = opts.Prior.Tab
+	}
+
+	for i, r := range m.rows() {
+		if r.item != nil && r.item.step.App.ID == opts.Focus {
+			m.cursor = i
+		}
 	}
 
 	final, err := tea.NewProgram(m).Run()
@@ -152,7 +176,7 @@ func Checklist(plan *install.Plan, opts ChecklistOptions) (ChecklistResult, bool
 		}
 	}
 
-	return ChecklistResult{Selection: sel, Upgrades: upgrades}, true, nil
+	return ChecklistResult{Selection: sel, Upgrades: upgrades, Switch: m.switchID, Tab: m.tab}, true, nil
 }
 
 func (m *checklist) addGroup(g string, seen map[string]bool) {
@@ -236,6 +260,12 @@ func (m *checklist) updateKey(key string) tea.Cmd {
 	case "v":
 		if it := m.current(rows); it != nil && it.step.Pin != (lock.Entry{}) {
 			it.latest = !it.latest
+		}
+	case "n":
+		if it := m.current(rows); it != nil && len(m.plan.Conflicts[it.step.App.ID]) > 1 {
+			m.switchID = it.step.App.ID
+
+			return tea.Quit
 		}
 	case "s":
 		if it := m.current(rows); it != nil && m.hasSettings(it) {
@@ -325,7 +355,7 @@ func (m *checklist) rows() []row {
 }
 
 func (m *checklist) matches(it *item) bool {
-	return tabs[m.tab].match(it.step) &&
+	return tabs[m.tab].match(m.plan, it.step) &&
 		(m.filter == "" || strings.Contains(it.step.App.ID, strings.ToLower(m.filter)))
 }
 
@@ -349,6 +379,10 @@ func (m *checklist) note(it *item) string {
 
 	if from := m.plan.From[s.App.ID]; from != "" {
 		parts = append(parts, "from "+from)
+	}
+
+	if others := slices.DeleteFunc(slices.Clone(m.plan.Conflicts[s.App.ID]), func(n string) bool { return n == m.plan.From[s.App.ID] }); len(others) > 0 {
+		parts = append(parts, "also on "+strings.Join(others, ", ")+" (n to switch)")
 	}
 
 	switch {
@@ -401,7 +435,7 @@ func (m *checklist) View() tea.View {
 	start, end := visibleWindow(len(rows), m.cursor, m.height)
 
 	for i := start; i < end; i++ {
-		line := renderRow(rows[i])
+		line := m.renderRow(rows[i])
 
 		if i == m.cursor {
 			line = cursorStyle.Render(line)
@@ -428,7 +462,7 @@ func (m *checklist) View() tea.View {
 
 	b.WriteString(dimStyle.Render(note) + "\n")
 	b.WriteString(helpStyle.Render("↑/↓ move · space toggle · a group · tab filter · / search · enter continue · "+back) + "\n")
-	b.WriteString(helpStyle.Render("v same/latest · s settings · u upgrade · r add recipe"))
+	b.WriteString(helpStyle.Render("v same/latest · s settings · n other node · u upgrade · r add recipe"))
 	v := tea.NewView(b.String())
 	v.AltScreen = true
 
@@ -442,7 +476,7 @@ func (m *checklist) tabBar() string {
 		n := 0
 
 		for _, it := range m.items {
-			if t.match(it.step) {
+			if t.match(m.plan, it.step) {
 				n++
 			}
 		}
@@ -461,7 +495,7 @@ func (m *checklist) tabBar() string {
 	return strings.Join(parts, " ")
 }
 
-func renderRow(r row) string {
+func (m *checklist) renderRow(r row) string {
 	if r.item == nil {
 		return groupStyle.Render("▸ " + r.group)
 	}
@@ -490,6 +524,10 @@ func renderRow(r row) string {
 
 	if r.item.noSettings {
 		detail += " · no settings"
+	}
+
+	if len(m.plan.Conflicts[s.App.ID]) > 1 {
+		detail = "⇄ " + m.plan.From[s.App.ID] + " · " + detail
 	}
 
 	if len(detail) > 60 {

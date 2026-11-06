@@ -104,3 +104,15 @@ func (x *executor) recordVersions() {
 		}
 	}
 }
+
+// sources says which node each installed app came from, and what the nodes have that was left out.
+func (x *executor) sources() {
+	x.report.TakenFrom = map[string]string{}
+	x.report.LeftOut = append([]Choice{}, x.plan.Skipped...)
+
+	for _, o := range append(slices.Clone(x.report.Done), x.report.Upgraded...) {
+		if from := x.plan.From[o.ID]; from != "" {
+			x.report.TakenFrom[o.ID] = from
+		}
+	}
+}

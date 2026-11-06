@@ -69,6 +69,8 @@ type InstallRequest struct {
 	Prefer       []string
 	IncludeStale bool
 	NoSettings   bool
+	// Choose takes an app from the named node (a choice in the picker).
+	Choose map[string]string
 }
 
 // Args are the install arguments that repeat the request in a terminal.
@@ -141,6 +143,20 @@ func LoadInstall(o Options, req InstallRequest) (*InstallInput, error) {
 		r.Prefer = append(r.Prefer, n)
 	}
 
+	for id, ref := range req.Choose {
+		n := node.Find(nodes, ref)
+
+		if n == nil {
+			return nil, fmt.Errorf("unknown or stale node %q chosen for %s", ref, id)
+		}
+
+		if r.Choose == nil {
+			r.Choose = map[string]*node.Node{}
+		}
+
+		r.Choose[id] = n
+	}
+
 	pick, err := install.Select(w.Config, nodes, w.Platform.Key(), w.Platform.FileKey(), r)
 
 	if err != nil {
@@ -168,6 +184,7 @@ func BuildPlan(ctx context.Context, o Options, in *InstallInput, sel install.Sel
 
 	plan.FileRoots = in.FileRoots
 	plan.From = in.Pick.From()
+	plan.Conflicts = in.Pick.Conflicts
 	plan.Skipped = in.Pick.Skipped
 	plan.Recorded = in.Workspace.Record
 

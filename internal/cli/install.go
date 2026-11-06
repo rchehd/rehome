@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"slices"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -194,7 +195,8 @@ func confirmAndRun(cmd *cobra.Command, plan *install.Plan, options install.Optio
 }
 
 // installPicker: the nodes, then the chosen node's apps, then the summary and the run. esc in the
-// checklist goes back to the nodes; a recipe added from it reloads the config and reopens it.
+// checklist goes back to the nodes; a recipe added from it, or an app taken from another node,
+// rebuilds the plan and reopens it.
 func installPicker(cmd *cobra.Command, req app.InstallRequest, sel install.Selection, f installFlags, options install.Options) (*app.InstallInput, *install.Report, error) {
 nodes:
 	for {
@@ -210,7 +212,7 @@ nodes:
 			return nil, nil, err
 		}
 
-		req.From = name
+		req.From, req.Choose = name, map[string]string{}
 		in, plan, err := buildPlan(cmd, req, sel, f)
 
 		if err != nil {
@@ -218,15 +220,27 @@ nodes:
 		}
 
 		f.version = plan.Mode
+		view := tui.ChecklistOptions{Source: name, Back: true}
 
 		for {
-			res, ok, err := tui.Checklist(plan, tui.ChecklistOptions{Source: name, Back: true})
+			res, ok, err := tui.Checklist(plan, view)
+			view.Prior, view.Focus = nil, ""
 
 			switch {
 			case err != nil || !ok:
 				return nil, nil, err
 			case res.Back:
 				continue nodes
+			case res.Switch != "":
+				req.Choose[res.Switch] = nextNode(plan.Conflicts[res.Switch], plan.From[res.Switch])
+
+				if in, plan, err = buildPlan(cmd, req, sel, f); err != nil {
+					return nil, nil, err
+				}
+
+				view.Prior, view.Focus = &res, res.Switch
+
+				continue
 			case res.AddRecipe != "":
 				if err := addRecipe(in, res.AddRecipe); err != nil {
 					cmd.PrintErrln("error:", err)
@@ -256,6 +270,11 @@ nodes:
 			return in, rep, err
 		}
 	}
+}
+
+// nextNode is the node after current in nodes, wrapping around.
+func nextNode(nodes []string, current string) string {
+	return nodes[(slices.Index(nodes, current)+1)%len(nodes)]
 }
 
 // nodeRows describes every node for the picker, with how many of its apps this machine lacks.

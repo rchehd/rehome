@@ -58,6 +58,8 @@ type Plan struct {
 	// From maps an app to the node it comes from; Skipped are apps the nodes have that cannot be planned.
 	From    map[string]string
 	Skipped []Choice
+	// Conflicts are apps several nodes have with different versions or settings, mapped to those nodes.
+	Conflicts map[string][]string
 	// Recorded receives the version of each app installed or found by the run.
 	Recorded func(id string, e lock.Entry)
 }

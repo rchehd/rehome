@@ -126,8 +126,9 @@ apps stay out of `install --all` unless you pass `--include-stale` (set `stale_a
 ### Install from another machine
 
 `rehome install` in a terminal lists the machines, with how many apps each has that this one does not. Open one to
-see its apps; Tab switches between all, missing here, can install, installed and no recipe. Space selects, `v`
-switches between the same version as that machine and the latest, `s` leaves an app's settings out, and `r` writes a
+see its apps; Tab switches between all, missing here, can install, installed, no recipe and conflicts. Space
+selects, `v` switches between the same version as that machine and the latest, `s` leaves an app's settings out, `n`
+takes an app from another machine when they disagree on its version or settings (marked `⇄`), and `r` writes a
 recipe for an app this OS has no installer for. The line under the list says where the version and settings come
 from, or why an app cannot be installed. Enter shows the plan before anything runs; Esc goes back to the machines.
 
@@ -140,7 +141,8 @@ Without the picker:
 - `--no-settings` installs the apps alone; `--reinstall` installs again what is present.
 
 Settings come from `--from`, else the first `--prefer` machine that has them, else the machine that published them
-most recently on the same OS. After an install, rehome offers to publish this machine (`--push` or `--no-push`).
+most recently on the same OS. The report after an install lists which machine each app came from and what was left
+out and why. After an install, rehome offers to publish this machine (`--push` or `--no-push`).
 
 ### Sync
 
