@@ -128,7 +128,7 @@ func (t tools) installPlan(ctx context.Context, _ *mcp.CallToolRequest, a PlanAr
 type InstallArgs struct {
 	App      string `json:"app" jsonschema:"app id"`
 	Platform string `json:"platform,omitempty" jsonschema:"debian, macos, fedora, arch or any (default: this machine)"`
-	Manager  string `json:"manager" jsonschema:"apt, snap, flatpak, npm, pipx, uv_tool, cargo, go or script"`
+	Manager  string `json:"manager" jsonschema:"apt, snap, flatpak, brew, cask, npm, pipx, uv_tool, cargo, go or script"`
 	Package  string `json:"package" jsonschema:"package name, or the install command for script"`
 	Bin      string `json:"bin,omitempty" jsonschema:"binary name or path that proves the install (needed for script)"`
 	Repo     string `json:"repo,omitempty" jsonschema:"apt repo name from apt_repos"`
@@ -163,20 +163,10 @@ func (t tools) addInstall(_ context.Context, _ *mcp.CallToolRequest, a InstallAr
 }
 
 func specFor(a InstallArgs) (config.InstallSpec, error) {
-	s := config.InstallSpec{Repo: a.Repo, Classic: a.Classic, Bin: a.Bin}
-	fields := map[string]*string{
-		"apt": &s.Apt, "snap": &s.Snap, "flatpak": &s.Flatpak, "npm": &s.Npm, "pipx": &s.Pipx,
-		"uv_tool": &s.UvTool, "cargo": &s.Cargo, "go": &s.GoPkg, "script": &s.Script,
-	}
-	field, ok := fields[a.Manager]
+	s, err := config.NewSpec(a.Manager, a.Package)
+	s.Repo, s.Classic, s.Bin = a.Repo, a.Classic, a.Bin
 
-	if !ok {
-		return s, fmt.Errorf("unknown manager %q", a.Manager)
-	}
-
-	*field = a.Package
-
-	return s, nil
+	return s, err
 }
 
 type CaptureArgs struct {

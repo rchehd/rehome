@@ -84,7 +84,11 @@ func newInstallCmd() *cobra.Command {
 
 			switch {
 			case picker:
-				rep, err = installInteractive(cmd, in, plan, options)
+				rep, err = installInteractive(cmd, in, plan, options, func(mode string) (*app.InstallInput, *install.Plan, error) {
+					f.version = mode
+
+					return buildPlan(cmd, req, install.Selection{All: f.reinstall, Offline: f.offline}, f)
+				})
 			case !f.yes:
 				rep, err = confirmAndRun(cmd, plan, options)
 			default:
@@ -191,30 +195,90 @@ func confirmAndRun(cmd *cobra.Command, plan *install.Plan, options install.Optio
 	return executePlan(cmd, plan, options)
 }
 
-// installInteractive: checklist of what the nodes have, then the summary, then the run.
-func installInteractive(cmd *cobra.Command, in *app.InstallInput, plan *install.Plan, options install.Options) (*install.Report, error) {
-	sel, upgrades, ok, err := tui.Checklist(plan)
+// installInteractive: checklist of what the nodes have, then the summary, then the run; a recipe
+// added from the checklist reloads the config and opens it again.
+func installInteractive(cmd *cobra.Command, in *app.InstallInput, plan *install.Plan, options install.Options, reload func(mode string) (*app.InstallInput, *install.Plan, error)) (*install.Report, error) {
+	for {
+		res, ok, err := tui.Checklist(plan)
+
+		if err != nil || !ok {
+			return nil, err
+		}
+
+		if res.AddRecipe != "" {
+			if err := addRecipe(in, res.AddRecipe); err != nil {
+				cmd.PrintErrln("error:", err)
+			}
+
+			if in, plan, err = reload(plan.Mode); err != nil {
+				return nil, err
+			}
+
+			continue
+		}
+
+		if len(res.Selection.IDs) == 0 {
+			cmd.Println("nothing selected")
+
+			return nil, nil
+		}
+
+		sel := res.Selection
+		sel.All, sel.Offline = plan.Reinstall, plan.Offline
+
+		if plan, err = app.BuildPlan(cmd.Context(), opts(cmd), in, sel); err != nil {
+			return nil, err
+		}
+
+		options.UpgradeIDs = res.Upgrades
+
+		return confirmAndRun(cmd, plan, options)
+	}
+}
+
+// addRecipe asks how id installs on this platform and writes it to rehome.yml.
+func addRecipe(in *app.InstallInput, id string) error {
+	if in.Root == "" {
+		return errors.New("the config is not a local folder; add the recipe where it lives")
+	}
+
+	var items []tui.MenuItem
+
+	for _, m := range config.Managers {
+		items = append(items, tui.MenuItem{Key: m, Title: m})
+	}
+
+	manager, err := tui.Menu("How does "+id+" install on "+in.Platform.Key()+"?", items)
+
+	if err != nil || manager == "" {
+		return err
+	}
+
+	help := manager + " package name"
+
+	if manager == "script" {
+		help = "the shell command that installs it"
+	}
+
+	pkg, ok, err := tui.Input("Recipe for "+id, help)
 
 	if err != nil || !ok {
-		return nil, err
+		return err
 	}
 
-	if len(sel.IDs) == 0 {
-		cmd.Println("nothing selected")
-
-		return nil, nil
-	}
-
-	sel.All, sel.Offline = plan.Reinstall, plan.Offline
-	plan, err = app.BuildPlan(cmd.Context(), opts(cmd), in, sel)
+	spec, err := config.NewSpec(manager, pkg)
 
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	options.UpgradeIDs = upgrades
+	if manager == "script" {
+		if spec.Bin, ok, err = tui.Input("Recipe for "+id, "binary name or path that proves it is installed"); err != nil || !ok {
+			return err
+		}
+	}
 
-	return confirmAndRun(cmd, plan, options)
+	return config.AddInstall(config.FilePath(in.Root), id, in.Platform.Key(), spec, "")
 }
 
 // liftTombstones drops the everywhere-removal of apps the user just installed again by name.

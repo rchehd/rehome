@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"slices"
 	"sync"
@@ -189,4 +190,25 @@ func (c *Config) Tombstone(id string) (Tombstone, bool) {
 	}
 
 	return c.Removed[i], true
+}
+
+// Managers are the install methods a recipe can name, as rehome.yml spells them.
+var Managers = []string{"apt", "snap", "flatpak", "brew", "cask", "npm", "pipx", "uv_tool", "cargo", "go", "script"}
+
+// NewSpec is a recipe that installs pkg with manager (for script, pkg is the command).
+func NewSpec(manager, pkg string) (InstallSpec, error) {
+	var s InstallSpec
+	fields := map[string]*string{
+		"apt": &s.Apt, "snap": &s.Snap, "flatpak": &s.Flatpak, "brew": &s.Brew, "cask": &s.Cask, "npm": &s.Npm,
+		"pipx": &s.Pipx, "uv_tool": &s.UvTool, "cargo": &s.Cargo, "go": &s.GoPkg, "script": &s.Script,
+	}
+	field, ok := fields[manager]
+
+	if !ok {
+		return s, fmt.Errorf("unknown manager %q", manager)
+	}
+
+	*field = pkg
+
+	return s, nil
 }

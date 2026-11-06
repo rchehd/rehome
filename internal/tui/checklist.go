@@ -40,11 +40,18 @@ type checklist struct {
 	height    int
 	done      bool
 	cancelled bool
+	recipe    string
 }
 
-// Checklist lets the user pick what to install; missing apps start checked. It returns the
-// selection and the ids to upgrade to their lock version.
-func Checklist(plan *install.Plan) (install.Selection, []string, bool, error) {
+// ChecklistResult is the user's choice: the apps to install and upgrade, or an app to write a recipe for first.
+type ChecklistResult struct {
+	Selection install.Selection
+	Upgrades  []string
+	AddRecipe string
+}
+
+// Checklist lets the user pick what to install; missing apps start checked. ok is false when cancelled.
+func Checklist(plan *install.Plan) (ChecklistResult, bool, error) {
 	m := &checklist{height: 20}
 	seen := map[string]bool{}
 
@@ -68,13 +75,17 @@ func Checklist(plan *install.Plan) (install.Selection, []string, bool, error) {
 	final, err := tea.NewProgram(m).Run()
 
 	if err != nil {
-		return install.Selection{}, nil, false, err
+		return ChecklistResult{}, false, err
 	}
 
 	m = final.(*checklist)
 
 	if m.cancelled {
-		return install.Selection{}, nil, false, nil
+		return ChecklistResult{}, false, nil
+	}
+
+	if m.recipe != "" {
+		return ChecklistResult{AddRecipe: m.recipe}, true, nil
 	}
 
 	sel := install.Selection{IDs: []string{}, Mode: plan.Mode}
@@ -94,7 +105,7 @@ func Checklist(plan *install.Plan) (install.Selection, []string, bool, error) {
 		}
 	}
 
-	return sel, upgrades, true, nil
+	return ChecklistResult{Selection: sel, Upgrades: upgrades}, true, nil
 }
 
 func (m *checklist) Init() tea.Cmd { return nil }
@@ -157,6 +168,12 @@ func (m *checklist) updateKey(key string) tea.Cmd {
 	case "u":
 		if it := m.current(rows); it != nil && it.step.Upgrade != (lock.Entry{}) {
 			it.upgrade = !it.upgrade
+		}
+	case "r":
+		if it := m.current(rows); it != nil && it.step.Code == install.ReasonNoRecipe {
+			m.recipe = it.step.App.ID
+
+			return tea.Quit
 		}
 	}
 
@@ -264,7 +281,7 @@ func (m *checklist) View() tea.View {
 		b.WriteString(line + "\n")
 	}
 
-	b.WriteString(helpStyle.Render("↑/↓ move · space toggle · a group · v lock/latest · u upgrade · / filter · enter continue · q quit"))
+	b.WriteString(helpStyle.Render("↑/↓ move · space toggle · a group · v same/latest · u upgrade · r add recipe · / filter · enter continue · q quit"))
 	v := tea.NewView(b.String())
 	v.AltScreen = true
 
