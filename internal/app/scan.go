@@ -150,7 +150,7 @@ func prepareNode(ctx context.Context, o Options, sp *ScanPlan, w *Workspace) (*N
 	next.System, next.Platform, next.FileKey, next.Arch = w.Platform.String(), w.Platform.Key(), w.Platform.FileKey(), w.Platform.Arch
 	next.Rehome = o.Version
 	next.Apps = current
-	next.Files = sp.Result.Config.Files
+	next.Files = mergeFiles(w.Self.Files, sp.Result.Config.Files)
 	next.Unknown = sp.Result.Unknown
 	np := &NodePlan{Node: &next}
 
@@ -172,4 +172,28 @@ func prepareNode(ctx context.Context, o Options, sp *ScanPlan, w *Workspace) (*N
 	}
 
 	return np, nil
+}
+
+// mergeFiles keeps every mapping the node had, such as hand-written Bitwarden ones, and adds the
+// scanned mappings whose src it does not have yet.
+func mergeFiles(have, scanned map[string][]config.FileMap) map[string][]config.FileMap {
+	out := maps.Clone(have)
+
+	if out == nil {
+		out = map[string][]config.FileMap{}
+	}
+
+	for group, found := range scanned {
+		merged := slices.Clone(out[group])
+
+		for _, f := range found {
+			if !slices.ContainsFunc(merged, func(h config.FileMap) bool { return h.Src == f.Src }) {
+				merged = append(merged, f)
+			}
+		}
+
+		out[group] = merged
+	}
+
+	return out
 }
