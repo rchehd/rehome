@@ -79,7 +79,7 @@ func pinLabel(e lock.Entry) string {
 	return e.Version
 }
 
-// recordVersions passes what is installed after the run to the plan's recorder.
+// recordVersions passes what is installed after the run, with its version where readable, to the plan's recorder.
 func (x *executor) recordVersions() {
 	if x.r.DryRun || x.plan.Recorded == nil {
 		return
@@ -92,16 +92,17 @@ func (x *executor) recordVersions() {
 			continue
 		}
 
-		v, ok := s.Adapter.(adapter.Versioner)
+		// Like scan, the node records the app even when its version cannot be read.
+		var e lock.Entry
 
-		if !ok {
-			continue
+		if v, ok := s.Adapter.(adapter.Versioner); ok {
+			if got, err := v.Version(x.ctx, x.r, s.Spec); err == nil {
+				e = got
+			}
 		}
 
-		if e, err := v.Version(x.ctx, x.r, s.Spec); err == nil && (e.Version != "" || e.Commit != "") {
-			e.Manager = s.Adapter.Name()
-			x.plan.Recorded(s.App.ID, e)
-		}
+		e.Manager = s.Adapter.Name()
+		x.plan.Recorded(s.App.ID, e)
 	}
 }
 
