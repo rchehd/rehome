@@ -12,8 +12,12 @@ unset CODEX_HOME CLAUDE_CONFIG_DIR XDG_CURRENT_DESKTOP DBUS_SESSION_BUS_ADDRESS 
 id=11111111-1111-4111-8111-111111111111
 workspace=4f2a9deaa47bd4c1d6e8f804c161a77a
 cursor="$HOME/.cursor/chats/$workspace/$id"
-mkdir -p "$HOME/.claude/projects/source-project" "$HOME/.codex/sessions/2026/11/05" "$cursor" "$work/bin" "$work/scanned" "$XDG_CONFIG_HOME/rehome"
-printf 'node_id: source\nnode_name: source\n' > "$XDG_CONFIG_HOME/rehome/settings.yml"
+mkdir -p "$HOME/.claude/projects/source-project" "$HOME/.codex/sessions/2026/11/05" "$cursor" "$work/bin" "$work/scanned"
+# rehome reads settings from os.UserConfigDir: XDG on Linux, ~/Library/Application Support on macOS.
+settings="$XDG_CONFIG_HOME/rehome"
+[[ "$(uname)" == Darwin ]] && settings="$HOME/Library/Application Support/rehome"
+mkdir -p "$settings"
+printf 'node_id: source\nnode_name: source\n' > "$settings/settings.yml"
 captured="$work/scanned/nodes/source/files"
 if command -v dpkg-query >/dev/null; then
   ln -s "$(command -v dpkg-query)" "$work/bin/dpkg-query"

@@ -10,8 +10,12 @@ export HOME="$work/source" XDG_CONFIG_HOME="$work/config" XDG_STATE_HOME="$work/
 unset XDG_CURRENT_DESKTOP DBUS_SESSION_BUS_ADDRESS WSL_DISTRO_NAME WSL_INTEROP
 mkdir -p "$HOME/.claude/agents" "$HOME/.codex/agents" "$HOME/.cursor/agents" \
   "$HOME/.local/share/claude/versions/fixture" "$HOME/.codex/packages/standalone/releases/fixture" \
-  "$HOME/.agents/skills/check/scripts" "$work/bin" "$work/scanned" "$work/restore/nodes/source" "$XDG_CONFIG_HOME/rehome"
-printf 'node_id: source\nnode_name: source\n' > "$XDG_CONFIG_HOME/rehome/settings.yml"
+  "$HOME/.agents/skills/check/scripts" "$work/bin" "$work/scanned" "$work/restore/nodes/source"
+# rehome reads settings from os.UserConfigDir: XDG on Linux, ~/Library/Application Support on macOS.
+settings="$XDG_CONFIG_HOME/rehome"
+[[ "$(uname)" == Darwin ]] && settings="$HOME/Library/Application Support/rehome"
+mkdir -p "$settings"
+printf 'node_id: source\nnode_name: source\n' > "$settings/settings.yml"
 captured="$work/scanned/nodes/source/files"
 
 if command -v dpkg-query >/dev/null; then
