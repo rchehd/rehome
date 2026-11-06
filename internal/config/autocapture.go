@@ -28,6 +28,9 @@ var autoExcludes = []string{
 	"**/*.trace", "**/*_trace.txt", "**/nohup.out", "**/blob-store/**", "**/.apm/**", "**/pkg/**",
 	"**/terminus-dependencies-*/**", "**/.terminus/plugins-*/**", "**/File System/**", "**/telemetry/**",
 	"**/intelephense/workspace/**", "**/*.bak", "**/*.bak-*",
+	// Desktop plumbing snap and flatpak copy into each sandbox; pulse/cookie is an auth key.
+	"**/ibus/bus/**", "**/pulse/cookie", "**/user-dirs.*", "**/*.md5sum", "**/*.uuid",
+	"snap/*/current/.config/gtk-3.0/**", "snap/*/current/.config/fontconfig/**",
 }
 
 func AutoExcludes() []string {
