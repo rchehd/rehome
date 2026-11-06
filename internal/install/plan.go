@@ -31,6 +31,8 @@ type Step struct {
 	Adapter adapter.Adapter
 	Status  string
 	Reason  string
+	// Code is the reason code of an unavailable step (ReasonNoRecipe, …).
+	Code string
 	// Pin is the exact version to install; empty means the latest.
 	Pin lock.Entry
 	// Installed is the version present now; Upgrade the newer one the source nodes have.
@@ -99,7 +101,7 @@ func Build(ctx context.Context, r *runner.Runner, cfg *config.Config, root strin
 			continue
 		}
 
-		step := resolveStep(ctx, r, app, p, sel, res)
+		step := resolveStep(ctx, r, cfg, app, p, sel, res)
 
 		if cfg.Ignored(app, p.Key(), config.ThisNode()) {
 			step.Status, step.Reason = StatusIgnored, "ignored on this machine or OS"
@@ -119,7 +121,7 @@ func Build(ctx context.Context, r *runner.Runner, cfg *config.Config, root strin
 	return plan, nil
 }
 
-func resolveStep(ctx context.Context, r *runner.Runner, app config.App, p platform.Platform, sel Selection, res *resolve.Resolver) Step {
+func resolveStep(ctx context.Context, r *runner.Runner, cfg *config.Config, app config.App, p platform.Platform, sel Selection, res *resolve.Resolver) Step {
 	step := Step{App: app}
 
 	if sel.IDs == nil && !app.IsEnabled() {
@@ -128,48 +130,15 @@ func resolveStep(ctx context.Context, r *runner.Runner, app config.App, p platfo
 		return step
 	}
 
-	spec, ok := app.Spec(p.Key())
+	spec, a, mapped, why := compatible(ctx, cfg, app, p, res)
+	step.Mapped = mapped
 
-	if reason := res.Catalog.WSLReason(p, app, spec); reason != "" {
-		step.Status, step.Reason = StatusUnavailable, reason
+	if why.Code != "" {
+		step.Status, step.Code, step.Reason = StatusUnavailable, why.Code, why.Text
 
-		return step
-	}
-
-	if !ok && len(app.Install) == 0 {
-		step.Status, step.Reason = StatusUnavailable, "no install method"
-
-		if app.Files != "" {
-			step.Status, step.Reason = StatusFilesOnly, ""
+		if len(app.Install) == 0 && app.Files != "" {
+			step.Status, step.Code, step.Reason = StatusFilesOnly, "", ""
 		}
-
-		return step
-	}
-
-	// The config was written on another OS: find this OS's installer by itself.
-	if !ok {
-		mapped, source, found := res.Resolve(ctx, app)
-
-		if !found {
-			step.Status = StatusUnavailable
-			step.Reason = "no installer found for " + p.Key() + ": add install." + p.Key() + " (rehome config add-install " + app.ID + " …)"
-
-			return step
-		}
-
-		spec, step.Mapped = mapped, source
-
-		if reason := res.Catalog.WSLReason(p, app, spec); reason != "" {
-			step.Status, step.Reason = StatusUnavailable, reason
-
-			return step
-		}
-	}
-
-	a, err := all.ByManager(spec)
-
-	if err != nil || !a.Available(p) {
-		step.Status, step.Reason = StatusUnavailable, fmt.Sprintf("manager %s is not available here", managerName(spec))
 
 		return step
 	}
