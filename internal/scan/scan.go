@@ -100,7 +100,7 @@ func Run(ctx context.Context, r *runner.Runner, p platform.Platform, cat *catalo
 		if reason := apt.BaselineWarning(ctx, r); reason != "" {
 			s.res.Attention = append(s.res.Attention, discover.Warning{
 				Path: "/var/log/installer/initial-status.gz", Reason: reason,
-				Action: "review new packages before publishing; disable unwanted apps with rehome config set <app> enabled=false",
+				Action: "check the new apps before you push",
 			})
 		}
 	}

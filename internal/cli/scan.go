@@ -18,6 +18,7 @@ import (
 	"github.com/rchehd/rehome/internal/scan"
 	"github.com/rchehd/rehome/internal/secrets"
 	"github.com/rchehd/rehome/internal/tui"
+	"github.com/rchehd/rehome/internal/ui"
 )
 
 func newScanCmd() *cobra.Command {
@@ -78,45 +79,56 @@ func newScanCmd() *cobra.Command {
 
 func printScanSummary(cmd *cobra.Command, sp *app.ScanPlan) {
 	r, rep := sp.Result, sp.Report
-	cmd.Printf("config    %s\n", filepath.Join(sp.Root, config.FileName))
-	cmd.Printf("node      %s · %d apps recorded\n", sp.Node.Node.Name, len(sp.Node.Node.Apps))
-	cmd.Printf("apps      %d new · %d updated · %d gone from this node · %d unknown\n", len(rep.Added), len(rep.Updated), len(sp.Node.Gone), len(r.Unknown))
-	printNames(cmd, "new", rep.Added, "")
-	printNames(cmd, "updated", rep.Updated, "")
-	printNames(cmd, "gone", sp.Node.Gone, "")
-	printNames(cmd, "unknown", slices.Sorted(maps.Keys(r.Unknown)), "rehome config add-install <id> … makes a recipe")
-	printSettings(cmd, r)
-	printSecrets(cmd, r.Findings)
-	printAttention(cmd, r.Attention)
+	out := ui.New(cmd.OutOrStdout())
+	unknown := slices.Sorted(maps.Keys(r.Unknown))
 
-	for _, w := range r.Warnings {
-		cmd.Printf("warning: %s\n", w)
+	out.Header(sp.Node.Node.Name, sp.Node.Node.System, fmt.Sprintf("%d apps recorded", len(sp.Node.Node.Apps)))
+	out.Section("Apps", "")
+	out.List(appItems(out, rep, sp.Node.Gone, unknown)...)
+	printSettings(out, r)
+	printSecrets(out, r.Findings)
+	printAttention(out, r.Attention, r.Warnings)
+
+	if sp.Changed() {
+		out.Summary("Plan:", ui.Paint(ui.Add, fmt.Sprintf("%d to add", len(rep.Added))), ui.Paint(ui.Update, fmt.Sprintf("%d to update", len(rep.Updated))), ui.Paint(ui.Drop, fmt.Sprintf("%d to drop", len(sp.Node.Gone))), fmt.Sprintf("%d settings files", len(r.FileChanges)))
+		out.Println(ui.Muted("config: " + filepath.Join(sp.Root, config.FileName)))
 	}
 }
 
-const shownNames = 12
+const labelWidth = 13
 
-// printNames lists names on one indented line, the first shownNames of them.
-func printNames(cmd *cobra.Command, label string, names []string, hint string) {
-	if len(names) == 0 {
-		return
+func appItems(out *ui.Out, rep config.MergeReport, gone, unknown []string) []ui.Item {
+	var items []ui.Item
+
+	add := func(m ui.Mark, label string, names []string) {
+		if len(names) > 0 {
+			items = append(items, ui.Item{Mark: m, Text: fmt.Sprintf("%-*s %s", labelWidth, fmt.Sprintf("%d %s", len(names), label), ui.Names(names, out.Room(labelWidth+6)))})
+		}
 	}
 
-	line := strings.Join(names[:min(len(names), shownNames)], ", ")
+	add(ui.Add, "new", rep.Added)
+	add(ui.Update, "updated", rep.Updated)
+	add(ui.Drop, "gone", gone)
 
-	if len(names) > shownNames {
-		line += fmt.Sprintf(" (+%d more)", len(names)-shownNames)
+	for i, id := range unknown {
+		unknown[i] = strings.TrimPrefix(id, "unknown-")
 	}
 
-	if hint != "" {
-		line += " — " + hint
+	add(ui.Unknown, "no recipe", unknown)
+
+	if len(unknown) > 0 {
+		items[len(items)-1].Sub = []string{"rehome config add-install <id> makes a recipe"}
 	}
 
-	cmd.Printf("          %s: %s\n", label, line)
+	if len(items) == 0 {
+		items = append(items, ui.Item{Mark: ui.Plain, Text: ui.Muted("no changes")})
+	}
+
+	return items
 }
 
 // printSettings counts settings files per app, the busiest apps first.
-func printSettings(cmd *cobra.Command, r *scan.Result) {
+func printSettings(out *ui.Out, r *scan.Result) {
 	newFiles, modified := 0, 0
 	perApp := map[string]int{}
 
@@ -130,6 +142,10 @@ func printSettings(cmd *cobra.Command, r *scan.Result) {
 		perApp[changeApp(c)]++
 	}
 
+	if len(r.FileChanges) == 0 {
+		return
+	}
+
 	auto := 0
 
 	for _, byKey := range r.Config.Capture {
@@ -140,13 +156,11 @@ func printSettings(cmd *cobra.Command, r *scan.Result) {
 		}
 	}
 
-	cmd.Printf("settings  %d new · %d changed in %d apps", newFiles, modified, len(perApp))
+	summary := fmt.Sprintf("%d files in %d apps · %s, %s", len(r.FileChanges), len(perApp), ui.Paint(ui.Add, fmt.Sprintf("%d new", newFiles)), ui.Paint(ui.Update, fmt.Sprintf("%d changed", modified)))
 
 	if auto > 0 {
-		cmd.Printf(" (%d found automatically outside the catalog)", auto)
+		summary += ui.Muted(fmt.Sprintf(" · %d apps found outside the catalog", auto))
 	}
-
-	cmd.Println()
 
 	apps := slices.SortedFunc(maps.Keys(perApp), func(a, b string) int {
 		return cmp.Or(perApp[b]-perApp[a], strings.Compare(a, b))
@@ -154,10 +168,11 @@ func printSettings(cmd *cobra.Command, r *scan.Result) {
 	var counts []string
 
 	for _, id := range apps {
-		counts = append(counts, fmt.Sprintf("%s %d", id, perApp[id]))
+		counts = append(counts, fmt.Sprintf("%s %d", strings.TrimPrefix(id, "unknown-"), perApp[id]))
 	}
 
-	printNames(cmd, "files", counts, "")
+	out.Section("Settings", summary)
+	out.List(ui.Item{Mark: ui.Plain, Text: ui.Names(counts, out.Room(6))})
 }
 
 // changeApp is the app a settings file belongs to: files/<app>/… in the config.
@@ -171,8 +186,10 @@ func changeApp(c files.Change) string {
 	return filepath.ToSlash(c.Dst)
 }
 
+const shownSecrets = 12
+
 // printSecrets groups redacted values by file.
-func printSecrets(cmd *cobra.Command, findings []secrets.Finding) {
+func printSecrets(out *ui.Out, findings []secrets.Finding) {
 	if len(findings) == 0 {
 		return
 	}
@@ -183,24 +200,26 @@ func printSecrets(cmd *cobra.Command, findings []secrets.Finding) {
 		keys[f.Path] = append(keys[f.Path], f.Key)
 	}
 
-	cmd.Printf("secrets   %d values redacted in %d files\n", len(findings), len(keys))
-
 	paths := slices.Sorted(maps.Keys(keys))
+	var rows [][]string
 
-	for _, path := range paths[:min(len(paths), shownNames)] {
-		cmd.Printf("          %s (%s)\n", path, strings.Join(slices.Compact(slices.Sorted(slices.Values(keys[path]))), ", "))
+	for _, path := range paths[:min(len(paths), shownSecrets)] {
+		rows = append(rows, []string{path, ui.Muted(strings.Join(slices.Compact(slices.Sorted(slices.Values(keys[path]))), ", "))})
 	}
 
-	if len(paths) > shownNames {
-		cmd.Printf("          +%d more files; r reviews them all\n", len(paths)-shownNames)
+	out.Section("Secrets", fmt.Sprintf("%d values redacted in %d files", len(findings), len(keys)))
+	out.Table(nil, rows)
+
+	if len(paths) > shownSecrets {
+		out.List(ui.Item{Mark: ui.Plain, Text: ui.Muted(fmt.Sprintf("+%d more files; Review files shows them all", len(paths)-shownSecrets))})
 	}
 }
 
 const groupedAttention = 3
 
 // printAttention lists what the user has to handle; repeated reasons collapse into one line.
-func printAttention(cmd *cobra.Command, items []discover.Warning) {
-	if len(items) == 0 {
+func printAttention(out *ui.Out, items []discover.Warning, warnings []string) {
+	if len(items)+len(warnings) == 0 {
 		return
 	}
 
@@ -224,22 +243,28 @@ func printAttention(cmd *cobra.Command, items []discover.Warning) {
 		byReason[k] = append(byReason[k], who)
 	}
 
-	cmd.Printf("needs your attention (%d):\n", len(items))
+	var lines []ui.Item
 
 	for _, k := range order {
 		paths := byReason[k]
 
 		if len(paths) < groupedAttention {
 			for _, p := range paths {
-				cmd.Printf("  ! %s: %s — %s\n", p, k.text, k.action)
+				lines = append(lines, ui.Item{Mark: ui.Attention, Text: p + ": " + k.text, Hint: k.action})
 			}
 
 			continue
 		}
 
-		cmd.Printf("  ! %d × %s — %s\n", len(paths), k.text, k.action)
-		printNames(cmd, "paths", paths, "")
+		lines = append(lines, ui.Item{Mark: ui.Attention, Text: fmt.Sprintf("%d × %s", len(paths), k.text), Hint: k.action, Sub: []string{ui.Names(paths, out.Room(8))}})
 	}
+
+	for _, w := range warnings {
+		lines = append(lines, ui.Item{Mark: ui.Attention, Text: "warning: " + w})
+	}
+
+	out.Section("Needs your attention", fmt.Sprintf("%d", len(items)+len(warnings)))
+	out.List(lines...)
 }
 
 // confirmChanges asks once for everything; "r" opens the files grouped by app to leave some out.
@@ -254,7 +279,7 @@ func confirmChanges(cmd *cobra.Command, changes []files.Change, yes bool) ([]fil
 		return nil, false
 	}
 
-	switch ask(cmd, "Write config and settings files? [y]es / [n]o / [r]eview files:", "n") {
+	switch askWrite(cmd) {
 	case "y":
 		return changes, true
 	case "r":
@@ -282,6 +307,23 @@ func confirmChanges(cmd *cobra.Command, changes []files.Change, yes bool) ([]fil
 	}
 
 	return nil, false
+}
+
+// askWrite returns y, n or r.
+func askWrite(cmd *cobra.Command) string {
+	choice, err := ui.Choose("Write the config and settings files?",
+		ui.Choice{Key: "y", Label: "Write"},
+		ui.Choice{Key: "r", Label: "Review files first"},
+		ui.Choice{Key: "n", Label: "Cancel"},
+	)
+
+	if err != nil {
+		cmd.PrintErrln("error:", err)
+
+		return "n"
+	}
+
+	return choice
 }
 
 func reviewFiles(changes []files.Change) []tui.ReviewFile {

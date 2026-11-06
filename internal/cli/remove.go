@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/rchehd/rehome/internal/app"
+	"github.com/rchehd/rehome/internal/ui"
 )
 
 type removeReport struct {
@@ -39,7 +40,7 @@ func newRemoveCmd() *cobra.Command {
 				return err
 			}
 
-			if !yes && !flags.dryRun && ask(cmd, removeQuestion(plan), "n") != "y" {
+			if !yes && !flags.dryRun && !confirm(cmd, removeQuestion(plan), false) {
 				cmd.Println("nothing removed")
 
 				return nil
@@ -67,6 +68,12 @@ func newRemoveCmd() *cobra.Command {
 				text += "\nnote: " + n
 			}
 
+			if !flags.json {
+				ui.New(cmd.OutOrStdout()).Done(text)
+
+				return nil
+			}
+
 			return report(cmd, out, text)
 		},
 	}
@@ -90,7 +97,7 @@ func removeQuestion(p *app.RemovePlan) string {
 		parts = append(parts, "mark it removed on every node")
 	}
 
-	return fmt.Sprintf("%s? [y/N]", capitalize(strings.Join(parts, " and ")))
+	return fmt.Sprintf("%s?", capitalize(strings.Join(parts, " and ")))
 }
 
 func capitalize(s string) string {
