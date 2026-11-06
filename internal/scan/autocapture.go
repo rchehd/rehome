@@ -21,8 +21,11 @@ func (s *scanner) captureByRules() {
 	key := s.p.FileKey()
 	claimed := discover.Claimed(catalogRules(s.cat, key))
 
-	for _, id := range slices.Sorted(maps.Keys(s.apps)) {
-		app := s.apps[id]
+	apps := maps.Clone(s.apps)
+	maps.Copy(apps, s.unknown)
+
+	for _, id := range slices.Sorted(maps.Keys(apps)) {
+		app := apps[id]
 
 		if app.Files != "" {
 			continue

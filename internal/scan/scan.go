@@ -53,7 +53,9 @@ type scanner struct {
 	cat  *catalog.Catalog
 	root string
 	apps map[string]*config.App
-	res  *Result
+	// unknown are binaries without a recipe: not apps, but their settings still go to this node.
+	unknown map[string]*config.App
+	res     *Result
 	// hints are extra names (package, binaries) used to find an app's settings.
 	hints map[string][]string
 	// existing is the config already in root; its capture rules are honoured.
@@ -68,7 +70,7 @@ func Run(ctx context.Context, r *runner.Runner, p platform.Platform, cat *catalo
 	if err := sessions.ValidatePaths(options.SessionPaths); err != nil {
 		return nil, err
 	}
-	s := &scanner{ctx: ctx, r: r, p: p, cat: cat, root: root, apps: map[string]*config.App{}, res: &Result{}, hints: map[string][]string{}, existing: existing, options: options}
+	s := &scanner{ctx: ctx, r: r, p: p, cat: cat, root: root, apps: map[string]*config.App{}, unknown: map[string]*config.App{}, res: &Result{}, hints: map[string][]string{}, existing: existing, options: options}
 	s.protectSecretFiles()
 
 	if p.WSL {
@@ -197,6 +199,8 @@ func (s *scanner) add(d adapter.Detected) {
 	if d.Manager == "unknown" && !ok {
 		id := "unknown-" + appID(d)
 
+		app.ID, app.Group = id, config.UnknownGroup
+
 		// Only a recipe the user wrote for it makes it an app; otherwise it is this node's note.
 		if _, known := s.existing.App(id); !known {
 			if s.res.Unknown == nil {
@@ -204,11 +208,10 @@ func (s *scanner) add(d adapter.Detected) {
 			}
 
 			s.res.Unknown[id] = d.Meta
+			s.unknown[id] = app
 
 			return
 		}
-
-		app.ID, app.Group = id, config.UnknownGroup
 	}
 
 	spec, _ := app.Spec(s.p.Key())
