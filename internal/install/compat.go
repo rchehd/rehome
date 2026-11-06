@@ -34,6 +34,10 @@ func compatible(ctx context.Context, cfg *config.Config, app config.App, p platf
 	spec, ok := app.Spec(p.Key())
 	mapped := ""
 
+	if reason := res.Catalog.WSLReason(p, app, spec); reason != "" {
+		return spec, nil, "", Reason{ReasonWSL, reason}
+	}
+
 	switch {
 	case !ok && len(app.Install) == 0:
 		return spec, nil, "", Reason{ReasonNoRecipe, "no recipe: add one (rehome config add-install " + app.ID + " …)"}

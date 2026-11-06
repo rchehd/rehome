@@ -142,7 +142,7 @@ func resolveStep(ctx context.Context, r *runner.Runner, cfg *config.Config, app 
 	if why.Code != "" {
 		step.Status, step.Code, step.Reason = StatusUnavailable, why.Code, why.Text
 
-		if len(app.Install) == 0 && app.Files != "" {
+		if why.Code == ReasonNoRecipe && len(app.Install) == 0 && app.Files != "" {
 			step.Status, step.Code, step.Reason = StatusFilesOnly, "", ""
 		}
 
