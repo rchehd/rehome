@@ -19,8 +19,9 @@ import (
 const sharedFiles = "apt"
 
 // v1to2 turns the single-machine layout into recipes plus this machine's node: settings files,
-// their mappings and this platform's lock entries move into nodes/<self>/, ignore keys become node names.
-func v1to2(root string, self *node.Node, dry bool) ([]string, error) {
+// their mappings and this platform's lock entries of apps present here move into nodes/<self>/,
+// ignore keys become node names.
+func v1to2(root string, self *node.Node, dry bool, present Present) ([]string, error) {
 	path := config.FilePath(root)
 	data, err := os.ReadFile(path)
 
@@ -58,6 +59,8 @@ func v1to2(root string, self *node.Node, dry bool) ([]string, error) {
 		}
 	}
 
+	specs := installSpecs(top, self.Platform)
+
 	if moved := nodeState(top, self); moved > 0 {
 		actions = append(actions, fmt.Sprintf("move %d unknown binaries from rehome.yml into %s", moved, rel(root, self.Path, node.FileName)))
 	}
@@ -85,14 +88,30 @@ func v1to2(root string, self *node.Node, dry bool) ([]string, error) {
 		}
 
 		self.Apps = map[string]lock.Entry{}
+		absent := 0
 
 		for id, byPlatform := range old.Apps {
-			if e, ok := byPlatform[self.Platform]; ok && !e.Unsupported {
-				self.Apps[id] = e
+			e, ok := byPlatform[self.Platform]
+
+			if !ok || e.Unsupported {
+				continue
 			}
+
+			// The v1 lock is shared by every machine; keep only what is installed here.
+			if spec, known := specs[id]; known && present != nil && !present(spec) {
+				absent++
+
+				continue
+			}
+
+			self.Apps[id] = e
 		}
 
 		actions = append(actions, fmt.Sprintf("move %d %s versions from rehome.lock into the node and remove rehome.lock", len(self.Apps), self.Platform))
+
+		if absent > 0 {
+			actions = append(actions, fmt.Sprintf("leave out %d versions of apps not installed here; their machines record them when they scan", absent))
+		}
 	}
 
 	groups, err := os.ReadDir(filepath.Join(root, "files"))
@@ -189,6 +208,30 @@ func nodeState(top *yaml.Node, self *node.Node) int {
 }
 
 // take removes key from the mapping and returns its value.
+// installSpecs maps each v1 app to how it installs on platform, or on any platform.
+func installSpecs(top *yaml.Node, platform string) map[string]config.InstallSpec {
+	var apps []struct {
+		ID      string                        `yaml:"id"`
+		Install map[string]config.InstallSpec `yaml:"install"`
+	}
+
+	specs := map[string]config.InstallSpec{}
+
+	if list := value(top, "apps"); list == nil || list.Decode(&apps) != nil {
+		return specs
+	}
+
+	for _, a := range apps {
+		if spec, ok := a.Install[platform]; ok {
+			specs[a.ID] = spec
+		} else if spec, ok := a.Install["any"]; ok {
+			specs[a.ID] = spec
+		}
+	}
+
+	return specs
+}
+
 func take(m *yaml.Node, key string) *yaml.Node {
 	for i := 0; i+1 < len(m.Content); i += 2 {
 		if m.Content[i].Value == key {
