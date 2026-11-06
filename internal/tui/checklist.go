@@ -42,6 +42,8 @@ var tabs = []tab{
 	{"conflicts", func(p *install.Plan, s install.Step) bool { return len(p.Conflicts[s.App.ID]) > 1 }},
 }
 
+const tabMissing = 1
+
 type item struct {
 	step    install.Step
 	checked bool
@@ -95,7 +97,7 @@ type ChecklistResult struct {
 
 // Checklist lets the user pick what to install; nothing starts checked. ok is false when cancelled.
 func Checklist(plan *install.Plan, opts ChecklistOptions) (ChecklistResult, bool, error) {
-	m := &checklist{plan: plan, opts: opts, height: 20}
+	m := &checklist{plan: plan, opts: opts, height: 20, tab: tabMissing}
 	seen := map[string]bool{}
 
 	for _, s := range plan.Steps {
