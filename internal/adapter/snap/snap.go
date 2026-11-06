@@ -103,3 +103,9 @@ func running() bool {
 
 	return err == nil
 }
+
+func (Snap) Remove(ctx context.Context, r *runner.Runner, s config.InstallSpec) error {
+	_, err := r.Run(ctx, runner.Cmd{Name: "snap", Args: []string{"remove", s.Snap}, Sudo: true})
+
+	return err
+}

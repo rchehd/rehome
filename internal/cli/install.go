@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -100,6 +101,10 @@ func newInstallCmd() *cobra.Command {
 			}
 
 			rep.Print(cmd.OutOrStdout())
+
+			if err := liftTombstones(cmd, in, rep); err != nil {
+				return err
+			}
 
 			if err := offerPush(cmd, f); err != nil {
 				return err
@@ -210,6 +215,29 @@ func installInteractive(cmd *cobra.Command, in *app.InstallInput, plan *install.
 	options.UpgradeIDs = upgrades
 
 	return confirmAndRun(cmd, plan, options)
+}
+
+// liftTombstones drops the everywhere-removal of apps the user just installed again by name.
+func liftTombstones(cmd *cobra.Command, in *app.InstallInput, rep *install.Report) error {
+	if flags.dryRun || in.Root == "" {
+		return nil
+	}
+
+	for _, o := range rep.Done {
+		t, ok := in.Config.Tombstone(o.ID)
+
+		if !ok {
+			continue
+		}
+
+		if err := config.DropRemoved(config.FilePath(in.Root), o.ID); err != nil {
+			return err
+		}
+
+		cmd.Printf("%s is no longer marked removed everywhere (%s removed it on %s)\n", o.ID, t.By, t.At.Format(time.DateOnly))
+	}
+
+	return nil
 }
 
 // offerPush publishes this node after an install: with --push, or when asked in a terminal.

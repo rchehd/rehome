@@ -41,6 +41,11 @@ type Pinner interface {
 	InstallVersion(ctx context.Context, r *runner.Runner, s config.InstallSpec, e lock.Entry) error
 }
 
+// Remover uninstalls a spec; managers without one only drop the app from the node.
+type Remover interface {
+	Remove(ctx context.Context, r *runner.Runner, s config.InstallSpec) error
+}
+
 // VersionChecker reports whether a Pinner's repository still offers a version.
 type VersionChecker interface {
 	HasVersion(ctx context.Context, r *runner.Runner, s config.InstallSpec, e lock.Entry) bool

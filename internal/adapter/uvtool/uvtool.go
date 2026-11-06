@@ -110,3 +110,10 @@ func requirement(rc receipt) string {
 
 	return spec
 }
+
+func (UvTool) Remove(ctx context.Context, r *runner.Runner, s config.InstallSpec) error {
+	name, _, _ := strings.Cut(strings.Fields(s.UvTool)[0], "[")
+	_, err := r.Run(ctx, runner.Cmd{Name: "uv", Args: []string{"tool", "uninstall", name}})
+
+	return err
+}

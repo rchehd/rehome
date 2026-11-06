@@ -105,3 +105,9 @@ func listRemotes(ctx context.Context, r *runner.Runner) (map[string]string, erro
 
 	return remotes, nil
 }
+
+func (Flatpak) Remove(ctx context.Context, r *runner.Runner, s config.InstallSpec) error {
+	_, err := r.Run(ctx, runner.Cmd{Name: "flatpak", Args: []string{"uninstall", "-y", "--noninteractive", s.Flatpak}, Sudo: true})
+
+	return err
+}

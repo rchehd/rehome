@@ -4,6 +4,7 @@ import (
 	"os"
 	"slices"
 	"sync"
+	"time"
 )
 
 const (
@@ -25,6 +26,15 @@ type Config struct {
 	Ignore map[string][]string `yaml:"ignore,omitempty"`
 	// Capture holds settings rules per app id and file key (linux, macos) beyond the catalog.
 	Capture map[string]map[string]FileRule `yaml:"capture,omitempty"`
+	// Removed are apps removed on every node: install --all skips them, sync offers to remove them.
+	Removed []Tombstone `yaml:"removed,omitempty"`
+}
+
+// Tombstone records which node removed an app everywhere, and when.
+type Tombstone struct {
+	ID string    `yaml:"id"`
+	By string    `yaml:"by"`
+	At time.Time `yaml:"at"`
 }
 
 type App struct {
@@ -170,4 +180,15 @@ func (c *Config) App(id string) (*App, bool) {
 	}
 
 	return nil, false
+}
+
+// Tombstone is the everywhere-removal of an app, if it has one.
+func (c *Config) Tombstone(id string) (Tombstone, bool) {
+	i := slices.IndexFunc(c.Removed, func(t Tombstone) bool { return t.ID == id })
+
+	if i < 0 {
+		return Tombstone{}, false
+	}
+
+	return c.Removed[i], true
 }

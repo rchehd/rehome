@@ -57,3 +57,9 @@ func (Cargo) Install(ctx context.Context, r *runner.Runner, s config.InstallSpec
 
 	return err
 }
+
+func (Cargo) Remove(ctx context.Context, r *runner.Runner, s config.InstallSpec) error {
+	_, err := r.Run(ctx, runner.Cmd{Shell: `[ -s "$HOME/.cargo/env" ] && . "$HOME/.cargo/env"; cargo uninstall -- ` + runner.Quote(s.Cargo)})
+
+	return err
+}

@@ -79,3 +79,9 @@ func (Pipx) Install(ctx context.Context, r *runner.Runner, s config.InstallSpec)
 
 	return err
 }
+
+func (Pipx) Remove(ctx context.Context, r *runner.Runner, s config.InstallSpec) error {
+	_, err := r.Run(ctx, runner.Cmd{Name: "pipx", Args: []string{"uninstall", s.Pipx}})
+
+	return err
+}

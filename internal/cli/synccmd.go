@@ -2,9 +2,11 @@ package cli
 
 import (
 	"errors"
+	"fmt"
 	"maps"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -15,9 +17,11 @@ import (
 )
 
 type syncReport struct {
-	Install   *install.Report `json:"install,omitempty"`
-	Scan      app.ScanReport  `json:"scan"`
-	Published bool            `json:"published"`
+	Install *install.Report `json:"install,omitempty"`
+	// RemovedElsewhere are apps still here that another node removed everywhere.
+	RemovedElsewhere []string       `json:"removed_elsewhere"`
+	Scan             app.ScanReport `json:"scan"`
+	Published        bool           `json:"published"`
 }
 
 func newSyncCmd() *cobra.Command {
@@ -59,6 +63,10 @@ func newSyncCmd() *cobra.Command {
 				}
 
 				out.Install = rep
+
+				if out.RemovedElsewhere, err = syncRemovals(cmd, f.yes); err != nil {
+					return err
+				}
 			}
 
 			scanned, err := syncScan(cmd, f.yes)
@@ -136,6 +144,45 @@ func syncApply(cmd *cobra.Command, f installFlags) (*install.Report, error) {
 	rep.Print(cmd.OutOrStdout())
 
 	return rep, nil
+}
+
+// syncRemovals offers to remove apps other nodes removed everywhere; nothing is removed unless the user says so.
+func syncRemovals(cmd *cobra.Command, yes bool) ([]string, error) {
+	o := opts(cmd)
+	w, err := app.LoadWorkspace(o)
+
+	if err != nil {
+		return nil, err
+	}
+
+	var offered []string
+
+	for _, p := range w.Tombstoned(cmd.Context(), o) {
+		offered = append(offered, p.ID)
+		about := fmt.Sprintf("%s removed %s everywhere on %s", p.Tombstone.By, p.ID, p.Tombstone.At.Format(time.DateOnly))
+
+		if yes || flags.json || !interactive() {
+			cmd.PrintErrf("%s; rehome remove %s removes it here\n", about, p.ID)
+
+			continue
+		}
+
+		if ask(cmd, about+". Remove it here? [y/N]", "n") != "y" {
+			continue
+		}
+
+		notes, err := p.Run(cmd.Context(), o)
+
+		if err != nil {
+			return offered, err
+		}
+
+		for _, n := range notes {
+			cmd.PrintErrln("note: " + n)
+		}
+	}
+
+	return offered, nil
 }
 
 // syncScan records this node: the apps and settings found here, written once confirmed.

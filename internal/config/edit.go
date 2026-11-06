@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -229,4 +230,50 @@ func RenameIgnore(path, from, to string) error {
 
 		return nil
 	})
+}
+
+// AddRemoved records an everywhere-removal, replacing an older one for the same app.
+func AddRemoved(path string, t Tombstone) error {
+	return Edit(path, func(root *yaml.Node) error {
+		var n yaml.Node
+
+		if err := n.Encode(t); err != nil {
+			return err
+		}
+
+		seq := removedSeq(root, true)
+		seq.Content = append(slices.DeleteFunc(seq.Content, func(e *yaml.Node) bool { return entryID(e) == t.ID }), &n)
+
+		return nil
+	})
+}
+
+// DropRemoved lifts an app's everywhere-removal.
+func DropRemoved(path, id string) error {
+	return Edit(path, func(root *yaml.Node) error {
+		if seq := removedSeq(root, false); seq != nil {
+			seq.Content = slices.DeleteFunc(seq.Content, func(e *yaml.Node) bool { return entryID(e) == id })
+		}
+
+		return nil
+	})
+}
+
+func removedSeq(root *yaml.Node, create bool) *yaml.Node {
+	if seq := child(root, "removed"); seq != nil || !create {
+		return seq
+	}
+
+	seq := &yaml.Node{Kind: yaml.SequenceNode}
+	root.Content = append(root.Content, &yaml.Node{Kind: yaml.ScalarNode, Value: "removed"}, seq)
+
+	return seq
+}
+
+func entryID(e *yaml.Node) string {
+	if id := child(e, "id"); id != nil {
+		return id.Value
+	}
+
+	return ""
 }

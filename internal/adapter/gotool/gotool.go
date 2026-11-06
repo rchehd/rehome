@@ -67,3 +67,26 @@ func (GoTool) Install(ctx context.Context, r *runner.Runner, s config.InstallSpe
 
 	return err
 }
+
+// Remove deletes the binary go install put in GOPATH/bin; Go has no uninstall command.
+func (GoTool) Remove(ctx context.Context, r *runner.Runner, s config.InstallSpec) error {
+	_, err := r.Run(ctx, runner.Cmd{Shell: `export PATH="$PATH:/usr/local/go/bin"; rm -f -- "$(go env GOPATH)/bin/"` + runner.Quote(binName(s))})
+
+	return err
+}
+
+// binName is the binary go install builds: the spec's bin, else the last path element that is not a major version.
+func binName(s config.InstallSpec) string {
+	if s.Bin != "" && !strings.Contains(s.Bin, "/") {
+		return s.Bin
+	}
+
+	parts := strings.Split(strings.TrimSuffix(s.GoPkg, "/"), "/")
+	name := parts[len(parts)-1]
+
+	if len(parts) > 1 && len(name) > 1 && name[0] == 'v' && strings.Trim(name[1:], "0123456789") == "" {
+		name = parts[len(parts)-2]
+	}
+
+	return name
+}

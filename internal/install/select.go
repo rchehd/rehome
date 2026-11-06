@@ -5,6 +5,7 @@ import (
 	"maps"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/rchehd/rehome/internal/config"
 	"github.com/rchehd/rehome/internal/lock"
@@ -77,12 +78,22 @@ func Select(cfg *config.Config, nodes []*node.Node, platformKey, fileKey string,
 			pick.Skipped = append(pick.Skipped, Choice{ID: id, Node: nameOf(owner(order, id)), Reason: "no recipe in rehome.yml"})
 		case !app.IsEnabled():
 			pick.Skipped = append(pick.Skipped, Choice{ID: id, Node: nameOf(owner(order, id)), Reason: "disabled in rehome.yml"})
+		case removed(cfg, id) != "":
+			pick.Skipped = append(pick.Skipped, Choice{ID: id, Node: nameOf(owner(order, id)), Reason: removed(cfg, id)})
 		default:
 			pick.take(id, owner(order, id))
 		}
 	}
 
 	return pick, nil
+}
+
+func removed(cfg *config.Config, id string) string {
+	if t, ok := cfg.Tombstone(id); ok {
+		return "removed everywhere by " + t.By + " on " + t.At.Format(time.DateOnly)
+	}
+
+	return ""
 }
 
 func (p *Pick) take(id string, from *node.Node) {

@@ -64,7 +64,7 @@ func newRoot() *cobra.Command {
 	pf.BoolVar(&flags.sessions, "sessions", false, "include local Claude Code, Codex and Cursor CLI sessions")
 	pf.StringToStringVar(&flags.sessionPaths, "session-path-map", nil, "map original project paths to new absolute paths (old=new)")
 
-	root.AddCommand(newVersionCmd(), newUpdateCmd(), newScanCmd(), newInstallCmd(), newSyncCmd(), newStatusCmd(), newConfigCmd(), newMCPCmd(), newLinkCmd(), newMigrateCmd(), newNodesCmd(), newPushCmd(), newPullCmd(), newDebugCmd())
+	root.AddCommand(newVersionCmd(), newUpdateCmd(), newScanCmd(), newInstallCmd(), newSyncCmd(), newStatusCmd(), newConfigCmd(), newMCPCmd(), newLinkCmd(), newMigrateCmd(), newNodesCmd(), newRemoveCmd(), newPushCmd(), newPullCmd(), newDebugCmd())
 
 	return root
 }

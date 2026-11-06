@@ -274,3 +274,9 @@ func Binaries(ctx context.Context, r *runner.Runner, pkg string) []string {
 
 	return bins
 }
+
+func (Apt) Remove(ctx context.Context, r *runner.Runner, s config.InstallSpec) error {
+	_, err := r.Run(ctx, AptGet("remove", "-y", "--", s.Apt))
+
+	return err
+}
