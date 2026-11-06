@@ -196,7 +196,9 @@ func (s *scanner) add(d adapter.Detected) {
 		app.Install[s.p.Key()] = d.Spec
 	}
 
-	if d.Manager == "unknown" && !ok {
+	if recipe, has := s.recipeFor(d); has && !ok {
+		app.ID, app.Group, app.Install = recipe.ID, recipe.Group, maps.Clone(recipe.Install)
+	} else if d.Manager == "unknown" && !ok {
 		id := "unknown-" + appID(d)
 
 		app.ID, app.Group = id, config.UnknownGroup
@@ -227,6 +229,23 @@ func (s *scanner) add(d adapter.Detected) {
 	}
 
 	s.apps[app.ID] = app
+}
+
+// recipeFor finds the user's recipe for a package installed without a repo, e.g. a .deb or a dropped source.
+func (s *scanner) recipeFor(d adapter.Detected) (*config.App, bool) {
+	pkg := d.Meta["package"]
+
+	if d.Manager != "unknown" || pkg == "" {
+		return nil, false
+	}
+
+	for i := range s.existing.Apps {
+		if spec, ok := s.existing.Apps[i].Spec(s.p.Key()); ok && spec.Apt == pkg {
+			return &s.existing.Apps[i], true
+		}
+	}
+
+	return nil, false
 }
 
 // mergeInto combines two detections of one app, e.g. a catalog path match and an apt package.
