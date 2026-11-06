@@ -556,8 +556,10 @@ func (m *checklist) renderRow(r row) string {
 		detail = detail[:57] + "…"
 	}
 
-	return fmt.Sprintf("  %s %-32s %s %-14s %s", box, s.App.ID, statusStyles[label].Render(fmt.Sprintf("%-9s", label)), versionLabel(r.item), dimStyle.Render(detail))
+	return fmt.Sprintf("  %s %-32s %s %-*s %s", box, s.App.ID, statusStyles[label].Render(fmt.Sprintf("%-9s", label)), versionWidth, clip(versionLabel(r.item), versionWidth), dimStyle.Render(detail))
 }
+
+const versionWidth = 14
 
 // versionLabel shows what will be installed: @pin, latest, or ↑ an available upgrade.
 func versionLabel(it *item) string {
