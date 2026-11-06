@@ -93,7 +93,7 @@ type ChecklistResult struct {
 	Tab       int
 }
 
-// Checklist lets the user pick what to install; missing apps start checked. ok is false when cancelled.
+// Checklist lets the user pick what to install; nothing starts checked. ok is false when cancelled.
 func Checklist(plan *install.Plan, opts ChecklistOptions) (ChecklistResult, bool, error) {
 	m := &checklist{plan: plan, opts: opts, height: 20}
 	seen := map[string]bool{}
@@ -103,10 +103,7 @@ func Checklist(plan *install.Plan, opts ChecklistOptions) (ChecklistResult, bool
 			continue
 		}
 
-		// Installed apps with settings start checked so new files from the config still arrive.
-		checked := s.Status == install.StatusInstall || s.Status == install.StatusFilesOnly ||
-			(s.Status == install.StatusInstalled && s.App.Files != "")
-		it := &item{step: s, checked: checked}
+		it := &item{step: s}
 
 		if p := opts.Prior; p != nil {
 			id := s.App.ID
@@ -257,6 +254,8 @@ func (m *checklist) updateKey(key string) tea.Cmd {
 		if m.cursor < len(rows) {
 			m.toggleGroup(rows[m.cursor].group)
 		}
+	case "A":
+		m.toggleMissing()
 	case "v":
 		if it := m.current(rows); it != nil && it.step.Pin != (lock.Entry{}) {
 			it.latest = !it.latest
@@ -329,6 +328,27 @@ func (m *checklist) toggleGroup(group string) {
 	}
 
 	for _, it := range members {
+		it.checked = check
+	}
+}
+
+// toggleMissing checks every visible app that is missing here, or unchecks them when all are checked.
+func (m *checklist) toggleMissing() {
+	var missing []*item
+
+	for _, it := range m.items {
+		if m.matches(it) && (it.step.Status == install.StatusInstall || it.step.Status == install.StatusFilesOnly) {
+			missing = append(missing, it)
+		}
+	}
+
+	check := false
+
+	for _, it := range missing {
+		check = check || !it.checked
+	}
+
+	for _, it := range missing {
 		it.checked = check
 	}
 }
@@ -461,7 +481,7 @@ func (m *checklist) View() tea.View {
 	}
 
 	b.WriteString(dimStyle.Render(note) + "\n")
-	b.WriteString(helpStyle.Render("↑/↓ move · space toggle · a group · tab filter · / search · enter continue · "+back) + "\n")
+	b.WriteString(helpStyle.Render("↑/↓ move · space toggle · a group · A all missing · tab filter · / search · enter continue · "+back) + "\n")
 	b.WriteString(helpStyle.Render("v same/latest · s settings · n other node · u upgrade · r add recipe"))
 	v := tea.NewView(b.String())
 	v.AltScreen = true
