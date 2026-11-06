@@ -192,7 +192,7 @@ func (m *checklist) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.height = max(5, msg.Height-9)
 	case tea.KeyPressMsg:
-		if m.filtering {
+		if m.filtering && msg.String() != "ctrl+c" {
 			m.updateFilter(msg.String())
 
 			return m, nil
@@ -483,8 +483,13 @@ func (m *checklist) View() tea.View {
 	}
 
 	b.WriteString(dimStyle.Render(note) + "\n")
-	b.WriteString(helpStyle.Render("↑/↓ move · space toggle · a group · A all missing · tab filter · / search · enter continue · "+back) + "\n")
-	b.WriteString(helpStyle.Render("v same/latest · s settings · n other node · u upgrade · r add recipe"))
+
+	if m.filtering {
+		b.WriteString(helpStyle.Render("type to search · enter apply · esc clear · ctrl+c quit"))
+	} else {
+		b.WriteString(helpStyle.Render("↑/↓ move · space toggle · a group · A all missing · tab filter · / search · enter continue · "+back) + "\n")
+		b.WriteString(helpStyle.Render("v same/latest · s settings · n other node · u upgrade · r add recipe"))
+	}
 	v := tea.NewView(b.String())
 	v.AltScreen = true
 
