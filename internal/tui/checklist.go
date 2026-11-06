@@ -73,6 +73,8 @@ type checklist struct {
 	done      bool
 	cancelled bool
 	recipe    string
+	// hint says why the last key did nothing; the next key clears it.
+	hint string
 }
 
 // ChecklistOptions name the node the plan comes from; Back lets esc return to the node list.
@@ -206,6 +208,7 @@ func (m *checklist) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m *checklist) updateKey(key string) tea.Cmd {
 	rows := m.rows()
+	m.hint = ""
 
 	switch key {
 	case "ctrl+c", "q":
@@ -261,6 +264,8 @@ func (m *checklist) updateKey(key string) tea.Cmd {
 	case "v":
 		if it := m.current(rows); it != nil && it.step.Pin != (lock.Entry{}) {
 			it.latest = !it.latest
+		} else if it != nil {
+			m.hint = versionHint(it.step)
 		}
 	case "n":
 		if it := m.current(rows); it != nil && len(m.plan.Conflicts[it.step.App.ID]) > 1 {
@@ -271,6 +276,8 @@ func (m *checklist) updateKey(key string) tea.Cmd {
 	case "s":
 		if it := m.current(rows); it != nil && m.hasSettings(it) {
 			it.noSettings = !it.noSettings
+		} else if it != nil {
+			m.hint = settingsHint(it)
 		}
 	case "u":
 		if it := m.current(rows); it != nil && it.step.Upgrade != (lock.Entry{}) {
@@ -430,6 +437,28 @@ func (m *checklist) note(it *item) string {
 	return strings.Join(parts, " · ")
 }
 
+func versionHint(s install.Step) string {
+	switch {
+	case s.Status == install.StatusInstalled:
+		return "v: already installed"
+	case s.PinNote != "":
+		return "v: only the latest can be installed (" + s.PinNote + ")"
+	}
+
+	return "v: no node recorded a version"
+}
+
+func settingsHint(it *item) string {
+	switch {
+	case !selectable(it):
+		return "s: it cannot be installed here"
+	case it.step.Status == install.StatusFilesOnly:
+		return "s: it brings only settings"
+	}
+
+	return "s: no settings recorded"
+}
+
 func (m *checklist) View() tea.View {
 	var b strings.Builder
 	rows := m.rows()
@@ -474,6 +503,10 @@ func (m *checklist) View() tea.View {
 
 	if it := m.current(rows); it != nil {
 		note = m.note(it)
+	}
+
+	if m.hint != "" {
+		note = m.hint
 	}
 
 	back := "q quit"
