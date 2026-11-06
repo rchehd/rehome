@@ -44,8 +44,8 @@ func TestBaselineWithMissingMetapackageAndInstallerSnapshot(t *testing.T) {
 			if !base["base-tool"] || !base["core-tool"] || base["firefox"] {
 				t.Fatalf("baseline lost known packages or hid a user app: %v", base)
 			}
-			if want := state == "fresh" || state == "upgraded"; base["gnome-shell"] != want {
-				t.Fatalf("desktop baseline = %t, want %t", base["gnome-shell"], want)
+			if !base["gnome-shell"] {
+				t.Fatal("desktop baseline lost gnome-shell")
 			}
 		})
 	}

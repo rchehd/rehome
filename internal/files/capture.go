@@ -78,6 +78,11 @@ func CaptureRules(id string, rules map[string]config.FileRule, fileKey, root str
 			continue
 		}
 
+		// Files an app writes itself and marks as generated, such as ddev's stock commands.
+		if rule.Origin == config.OriginAuto && bytes.Contains(raw, []byte("#ddev-generated")) {
+			continue
+		}
+
 		dst := path.Join("files", id, filepath.ToSlash(rel))
 		maps = append(maps, fileMap(rules, dst, rel, info.Mode().Perm(), harnessFile))
 		redacted, findings := secrets.Redact(adapter.Tilde(src), raw)

@@ -122,7 +122,11 @@ func (s *scanner) names(app *config.App) []string {
 var plumbing = []string{"pulse", "ibus", "dconf", "systemd", "gnome-session", "enchant", "procps", "menus", "autostart", "goa-1.0", "evolution", "rehome", "session", "update-notifier", "yelp"}
 
 // Browser profiles are huge and synced by the browser itself.
-var browsers = []string{"google-chrome", "google-chrome-beta", "google-chrome-for-testing", "google-chrome-headless", "chromium", "BraveSoftware", "vivaldi", "opera", "microsoft-edge", "mozilla"}
+var browsers = []string{
+	"google-chrome", "google-chrome-beta", "google-chrome-unstable", "google-chrome-for-testing", "google-chrome-headless",
+	"chromium", "BraveSoftware", "vivaldi", "vivaldi-snapshot", "opera", "opera-beta", "opera-developer",
+	"microsoft-edge", "microsoft-edge-beta", "microsoft-edge-dev", "mozilla",
+}
 
 // unclaimedConfigDirs reports ~/.config directories no rule takes, so nothing is lost silently.
 func unclaimedConfigDirs(cfg *config.Config, cat *catalog.Catalog, key string) []discover.Warning {

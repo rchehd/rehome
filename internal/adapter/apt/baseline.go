@@ -25,6 +25,10 @@ var baseMetas = []string{
 	"task-desktop", "task-gnome-desktop", "task-kde-desktop", "task-xfce-desktop",
 }
 
+// Desktop metapackages whose dependencies stand in for a stock install once both the snapshot and
+// the installed metapackage are gone.
+var desktopMetas = []string{"ubuntu-desktop-minimal", "ubuntu-desktop", "task-desktop"}
+
 // Baseline returns the packages a fresh OS install already has.
 func Baseline(ctx context.Context, r *runner.Runner) (map[string]bool, error) {
 	return baseline(ctx, r, initialStatus)
@@ -65,11 +69,42 @@ func baseline(ctx context.Context, r *runner.Runner, snapshot string) (map[strin
 	}
 
 	initial, _ := readInitialStatus(snapshot)
+
 	for _, pkg := range initial {
 		base[pkg] = true
 	}
 
+	if len(initial) == 0 && !hasDesktopMeta(installed) {
+		for _, d := range indexedDesktopDeps(ctx, r) {
+			base[d] = true
+		}
+	}
+
 	return base, nil
+}
+
+// indexedDesktopDeps lists installed packages a desktop metapackage from the apt index would pull in,
+// even when that metapackage itself was removed.
+func indexedDesktopDeps(ctx context.Context, r *runner.Runner) []string {
+	var deps []string
+
+	for _, m := range desktopMetas {
+		if d, err := recursiveDeps(ctx, r, []string{m}); err == nil {
+			deps = append(deps, d...)
+		}
+	}
+
+	return deps
+}
+
+func hasDesktopMeta(installed map[string]string) bool {
+	for _, meta := range baseMetas {
+		if _, ok := installed[meta]; ok && meta != "ubuntu-minimal" && meta != "ubuntu-standard" {
+			return true
+		}
+	}
+
+	return false
 }
 
 func installedPriorities(ctx context.Context, r *runner.Runner) (map[string]string, error) {
@@ -220,12 +255,9 @@ func BaselineWarning(ctx context.Context, r *runner.Runner) string {
 }
 
 func baselineWarning(installed map[string]string) string {
-	for _, meta := range baseMetas {
-		if meta != "ubuntu-minimal" && meta != "ubuntu-standard" {
-			if _, ok := installed[meta]; ok {
-				return ""
-			}
-		}
+	if hasDesktopMeta(installed) {
+		return ""
 	}
-	return "installer package snapshot is unavailable and no desktop/server metapackage is installed; additional base-system packages may appear as new"
+
+	return "installer package snapshot is unavailable and no desktop/server metapackage is installed; base-system packages are taken from the desktop metapackage in the apt index, others may appear as new"
 }
