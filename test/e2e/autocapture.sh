@@ -8,7 +8,8 @@ trap 'echo "Autocapture E2E failed at line $LINENO" >&2' ERR
 
 export HOME="$work/home" XDG_CONFIG_HOME="$work/config" XDG_STATE_HOME="$work/state"
 unset CODEX_HOME CLAUDE_CONFIG_DIR XDG_CURRENT_DESKTOP DBUS_SESSION_BUS_ADDRESS WSL_DISTRO_NAME WSL_INTEROP
-mkdir -p "$HOME/.local/bin" "$work/bin" "$work/fresh" "$work/legacy"
+mkdir -p "$HOME/.local/bin" "$work/bin" "$work/fresh" "$work/legacy" "$XDG_CONFIG_HOME/rehome"
+printf 'node_id: e2e\nnode_name: e2e\n' > "$XDG_CONFIG_HOME/rehome/settings.yml"
 if command -v dpkg-query >/dev/null; then
   ln -s "$(command -v dpkg-query)" "$work/bin/dpkg-query"
 fi
@@ -23,7 +24,7 @@ for rel in settings.json Preferences Crashpad/client_id VideoDecodeStats/LOCK Vi
 done
 
 cat > "$work/legacy/rehome.yml" <<'YAML'
-version: 1
+version: 2
 apps: []
 capture:
   unknown-claude-desktop:
@@ -38,7 +39,7 @@ YAML
 for config in fresh legacy; do
   for option in "" --sessions; do
     PATH="$work/bin" "$rehome" scan $option --yes --json --config "$work/$config" > "$work/scan.json"
-    captured="$work/$config/files/unknown-claude-desktop/.config/Claude"
+    captured="$work/$config/nodes/e2e/files/unknown-claude-desktop/.config/Claude"
     [[ -f "$captured/settings.json" && -f "$captured/Preferences" ]]
     [[ "$(find "$captured" -type f | wc -l)" -eq 2 ]]
     grep -q 'Desktop session format is unsupported' "$work/scan.json"

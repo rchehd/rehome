@@ -9,7 +9,8 @@ trap 'echo "GNOME dconf E2E failed at line $LINENO" >&2' ERR
 export HOME="$work/home" XDG_CONFIG_HOME="$work/source" XDG_STATE_HOME="$work/state"
 export XDG_CURRENT_DESKTOP=GNOME
 unset DBUS_SESSION_BUS_ADDRESS DCONF_PROFILE
-mkdir -p "$HOME" "$XDG_CONFIG_HOME" "$work/scanned" "$work/restore/files/gnome-settings"
+mkdir -p "$HOME" "$XDG_CONFIG_HOME/rehome" "$work/scanned" "$work/restore/nodes/source/files/gnome-settings"
+printf 'node_id: source\nnode_name: source\n' > "$XDG_CONFIG_HOME/rehome/settings.yml"
 
 dbus-run-session -- bash -eu <<'SH'
 dconf write /org/gnome/desktop/interface/color-scheme "'prefer-dark'"
@@ -19,9 +20,9 @@ dconf write /org/gnome/online-accounts/example "'fixture-outside-snapshot'"
 SH
 
 "$rehome" scan --yes --json --config "$work/scanned" > "$work/scan.json"
-snapshot=files/gnome-settings/dconf.ini
+snapshot=nodes/source/files/gnome-settings/dconf.ini
 grep -q 'id: gnome-settings' "$work/scanned/rehome.yml"
-grep -q 'dconf: true' "$work/scanned/rehome.yml"
+grep -q 'dconf: true' "$work/scanned/nodes/source/node.yml"
 grep -Fxq "color-scheme='prefer-dark'" "$work/scanned/$snapshot"
 grep -q '<rehome:redacted>' "$work/scanned/$snapshot"
 
@@ -32,11 +33,17 @@ fi
 
 cp "$work/scanned/$snapshot" "$work/restore/$snapshot"
 cat > "$work/restore/rehome.yml" <<'YAML'
-version: 1
+version: 2
 apps:
   - id: gnome-settings
     files: gnome-settings
     skip: [macos]
+YAML
+cat > "$work/restore/nodes/source/node.yml" <<'YAML'
+id: source
+name: source
+platform: debian
+file_key: linux
 files:
   gnome-settings:
     - src: files/gnome-settings/dconf.ini
@@ -51,7 +58,7 @@ dconf write /org/gnome/desktop/interface/cursor-size 41
 SH
 
 install_fixture() {
-  "$rehome" install --yes --offline --config "$work/restore" "$@"
+  "$rehome" install --all --yes --offline --config "$work/restore" "$@"
 }
 
 mkdir "$work/fresh"
