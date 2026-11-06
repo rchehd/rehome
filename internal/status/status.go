@@ -131,6 +131,13 @@ func Compute(ctx context.Context, r *runner.Runner, cfg *config.Config, existing
 		st.ChangedFiles = append(st.ChangedFiles, c.Dst)
 	}
 	if options.Sessions {
+		// Session snapshots live in this machine's node, like its other settings.
+		filesRoot := root
+
+		if options.FilesRoot != "" {
+			filesRoot = options.FilesRoot
+		}
+
 		for _, step := range plan.Steps {
 			if step.Status == install.StatusDisabled || step.Status == install.StatusIgnored || step.Status == install.StatusUnavailable {
 				continue
@@ -141,7 +148,7 @@ func Compute(ctx context.Context, r *runner.Runner, cfg *config.Config, existing
 					sessionMaps = append(sessionMaps, mapping)
 				}
 			}
-			results, err := files.Apply(ctx, root, sessionMaps, files.ApplyOptions{Sessions: true, DryRun: true, SessionPaths: options.SessionPaths})
+			results, err := files.Apply(ctx, filesRoot, sessionMaps, files.ApplyOptions{Sessions: true, DryRun: true, SessionPaths: options.SessionPaths})
 			if err != nil {
 				return nil, err
 			}
