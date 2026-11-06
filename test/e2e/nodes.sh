@@ -1,11 +1,12 @@
 #!/bin/bash
 # Two machines share one repo: b installs what a has with a's settings, then removes an app everywhere.
+# Runs after check.sh, which installed mc on this system; scan finds it and captures ~/.config/mc.
 set -Eeuo pipefail
 
 rehome="$1"
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
-trap 'echo "Nodes E2E failed at line $LINENO" >&2' ERR
+trap 'echo "Nodes E2E failed at line $LINENO" >&2; tail -n 25 "$work"/*.log >&2 2>/dev/null' ERR
 
 export GIT_AUTHOR_NAME=e2e GIT_AUTHOR_EMAIL=e2e@example.test GIT_COMMITTER_NAME=e2e GIT_COMMITTER_EMAIL=e2e@example.test
 unset XDG_CURRENT_DESKTOP DBUS_SESSION_BUS_ADDRESS WSL_DISTRO_NAME WSL_INTEROP
@@ -14,14 +15,8 @@ mkdir -p "$work/seed"
 cat > "$work/seed/rehome.yml" <<'YAML'
 version: 2
 apps:
-  - id: tool-x
-    install: { any: { script: touch ~/.tool-x, bin: ~/.tool-x } }
-    files: tool-x
   - id: tool-y
     install: { any: { script: touch ~/.tool-y, bin: ~/.tool-y } }
-capture:
-  tool-x:
-    linux: { base: ~/.config/tool-x, include: ["*.conf"] }
 YAML
 git -C "$work/seed" init -q -b main
 git -C "$work/seed" add -A
@@ -40,12 +35,15 @@ as() {
   HOME="$work/$name/home" XDG_CONFIG_HOME="$work/$name/config" XDG_STATE_HOME="$work/$name/state" "$rehome" "$@"
 }
 
-touch "$work/a/home/.tool-x" "$work/a/home/.tool-y"
-mkdir -p "$work/a/home/.config/tool-x"
-printf 'colour = blue\n' > "$work/a/home/.config/tool-x/main.conf"
+mkdir -p "$work/a/home/.config/mc"
+printf '[Midnight-Commander]\nskin=node-a\n' > "$work/a/home/.config/mc/ini"
 as a scan --yes > "$work/a-scan.log"
+# Scan records what it detects; a script install is recorded by installing it through rehome.
+as a install tool-y --yes > "$work/a-install.log"
 as a push > "$work/a-push.log"
-git -C "$work/origin.git" show main:nodes/a/node.yml | grep -q 'tool-x'
+git -C "$work/origin.git" show main:nodes/a/node.yml > "$work/a-node.yml"
+grep -q 'tool-y' "$work/a-node.yml"
+grep -q 'mc/ini' "$work/a-node.yml"
 
 as b pull > /dev/null
 as b nodes --json > "$work/nodes.json"
@@ -55,8 +53,8 @@ as b install --dry-run --json --from a > "$work/plan.json"
 grep -q '"from": "a"' "$work/plan.json"
 
 as b install --from a --yes --version latest --push > "$work/b-install.log"
-[[ -e "$work/b/home/.tool-x" && -e "$work/b/home/.tool-y" ]]
-cmp -s "$work/a/home/.config/tool-x/main.conf" "$work/b/home/.config/tool-x/main.conf"
+[[ -e "$work/b/home/.tool-y" ]]
+cmp -s "$work/a/home/.config/mc/ini" "$work/b/home/.config/mc/ini"
 git -C "$work/origin.git" show main:nodes/b/node.yml | grep -q 'tool-y'
 
 as b remove tool-y --everywhere --yes > "$work/b-remove.log"

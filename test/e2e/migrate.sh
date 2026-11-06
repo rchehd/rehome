@@ -7,7 +7,7 @@ rehome="$1"
 fixture="$2"
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
-trap 'echo "Migrate E2E failed at line $LINENO" >&2' ERR
+trap 'echo "Migrate E2E failed at line $LINENO" >&2; tail -n 25 "$work"/*.log >&2 2>/dev/null' ERR
 
 export GIT_AUTHOR_NAME=e2e GIT_AUTHOR_EMAIL=e2e@example.test GIT_COMMITTER_NAME=e2e GIT_COMMITTER_EMAIL=e2e@example.test
 unset XDG_CURRENT_DESKTOP DBUS_SESSION_BUS_ADDRESS WSL_DISTRO_NAME WSL_INTEROP

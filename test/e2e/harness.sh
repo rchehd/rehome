@@ -4,7 +4,7 @@ set -Eeuo pipefail
 rehome="$1"
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
-trap 'echo "Harness E2E failed at line $LINENO" >&2' ERR
+trap 'echo "Harness E2E failed at line $LINENO" >&2; tail -n 25 "$work"/*.log >&2 2>/dev/null' ERR
 
 export HOME="$work/source" XDG_CONFIG_HOME="$work/config" XDG_STATE_HOME="$work/state"
 unset XDG_CURRENT_DESKTOP DBUS_SESSION_BUS_ADDRESS WSL_DISTRO_NAME WSL_INTEROP
@@ -47,9 +47,10 @@ apps:
   - {id: cursor-agent-data, files: cursor-agent-data}
   - {id: shared-agent-skills, files: shared-agent-skills}
 YAML
-cat > "$work/restore/nodes/source/node.yml" <<'YAML'
+cat > "$work/restore/nodes/source/node.yml" <<YAML
 id: source
 name: source
+last_seen: $(date -u +%Y-%m-%dT%H:%M:%SZ)
 files:
   cursor-agent-data:
     - {src: files/cursor-agent-data/agents/review.md, dest: {linux: ~/.cursor/agents/review.md, macos: ~/.cursor/agents/review.md}}

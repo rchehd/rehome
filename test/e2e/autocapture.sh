@@ -4,7 +4,7 @@ set -Eeuo pipefail
 rehome="$1"
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
-trap 'echo "Autocapture E2E failed at line $LINENO" >&2' ERR
+trap 'echo "Autocapture E2E failed at line $LINENO" >&2; tail -n 25 "$work"/*.log >&2 2>/dev/null' ERR
 
 export HOME="$work/home" XDG_CONFIG_HOME="$work/config" XDG_STATE_HOME="$work/state"
 unset CODEX_HOME CLAUDE_CONFIG_DIR XDG_CURRENT_DESKTOP DBUS_SESSION_BUS_ADDRESS WSL_DISTRO_NAME WSL_INTEROP
