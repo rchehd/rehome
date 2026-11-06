@@ -24,8 +24,8 @@ var (
 	// key = value, "key": "value", export KEY=value — only where a key can start (line start,
 	// after { or , or npmrc's /:), so prose like "If all PASS: ..." is left alone.
 	assignment = regexp.MustCompile(`(^\s*(?:export\s+|set\s+|-\s+)?|[{,]\s*|/:)(["']?)([A-Za-z_][\w.-]*)(["']?)(\s*[:=]\s*)(?:"((?:[^"\\]|\\.)*)"|'([^']*)'|([^\s"',#}\]]+))`)
-	// --api-key VALUE, --token=VALUE, "--api-key", "VALUE".
-	flagValue  = regexp.MustCompile(`(?i)(--?[a-z][\w-]*(?:key|token|secret|password)[\w-]*)("?\s*,\s*"|=|\s+)([^\s"',\]]{6,})`)
+	// --api-key VALUE, --token=VALUE, "--api-key", "VALUE"; lowercase flags ending in the word, not -webkit-keyframes.
+	flagValue  = regexp.MustCompile(`(--?[a-z0-9_-]*(?:key|token|secret|password))("?\s*,\s*"|=|\s+)([^\s"',\]]{6,})`)
 	tokenShape = regexp.MustCompile(`\b(sk-ant-[\w-]{20,}|sk-[A-Za-z0-9_-]{16,}|ghp_[A-Za-z0-9]{30,}|gho_[A-Za-z0-9]{30,}|ghu_[A-Za-z0-9]{30,}|ghs_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{20,}|glpat-[\w-]{20,}|xox[abposr]-[A-Za-z0-9-]{10,}|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{35})\b`)
 	authScheme = regexp.MustCompile(`(?i)\b(bearer|basic|token)(\s+)([A-Za-z0-9._~+/=-]{12,})`)
 	userinfo   = regexp.MustCompile(`([a-z][a-z0-9+.-]*://)([^/\s:@"']+)(?::([^/\s@"']+))?@`)
@@ -171,7 +171,7 @@ func looksSecret(v string) bool {
 	}
 
 	switch strings.ToLower(v) {
-	case "true", "false", "null", "none", "undefined":
+	case "true", "false", "null", "none", "undefined", "enabled", "disabled":
 		return false
 	}
 
