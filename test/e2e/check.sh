@@ -129,5 +129,19 @@ else
   fail "fresh and legacy auto rules exclude runtime/Desktop sessions in scan and status"
 fi
 
+echo "== migration"
+if as_dev "bash /e2e/migrate.sh /home/dev/rehome /e2e/fixture-v1"; then
+  pass "v1 repo migrated once, reused by a later machine, and a concurrent migration set aside"
+else
+  fail "v1 repo migrated once, reused by a later machine, and a concurrent migration set aside"
+fi
+
+echo "== two nodes"
+if as_dev "bash /e2e/nodes.sh /home/dev/rehome"; then
+  pass "install --from another node with its settings, remove --everywhere and the sync notice"
+else
+  fail "install --from another node with its settings, remove --everywhere and the sync notice"
+fi
+
 echo "== $failures failure(s)"
 [ "$failures" -eq 0 ]

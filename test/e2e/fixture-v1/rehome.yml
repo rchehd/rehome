@@ -1,0 +1,16 @@
+version: 1
+apps:
+  - id: htop
+    install: { debian: { apt: htop } }
+  - id: zsh
+    group: shell
+    install: { debian: { apt: zsh } }
+    files: zsh
+  - id: unknown-hermes # unknown binaries move into the node
+    group: unknown
+    enabled: false
+    detected: { path: ~/.local/bin/hermes }
+
+files:
+  zsh:
+    - { src: files/zsh/.zshrc, dest: { linux: ~/.zshrc } }
