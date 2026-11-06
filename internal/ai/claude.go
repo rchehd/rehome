@@ -10,12 +10,15 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/rchehd/rehome/internal/adapter"
 	"github.com/rchehd/rehome/internal/files"
 	"github.com/rchehd/rehome/internal/runner"
 	"github.com/rchehd/rehome/internal/secrets"
 )
+
+const claudeTimeout = 3 * time.Minute
 
 const (
 	MCPFile     = "files/claude-code/mcp.json"
@@ -74,9 +77,13 @@ func CaptureClaude(root string) ([]files.Change, error) {
 
 // RestoreClaude re-adds marketplaces, plugins and MCP servers through the claude CLI,
 // skipping what is already there. notes lists MCP servers that need secrets filled in.
-func RestoreClaude(ctx context.Context, r *runner.Runner, root string) (notes []string, errs []error) {
+func RestoreClaude(ctx context.Context, r *runner.Runner, root string, step func(string)) (notes []string, errs []error) {
 	if !adapter.HasCmd("claude") && !adapter.BinExists("claude") {
 		return nil, []error{errors.New("claude-code: claude is not installed, skipping plugins and MCP")}
+	}
+
+	if step == nil {
+		step = func(string) {}
 	}
 
 	claude := "claude"
@@ -90,7 +97,7 @@ func RestoreClaude(ctx context.Context, r *runner.Runner, root string) (notes []
 	if ok, err := readJSON(filepath.Join(root, PluginsFile), &plugins); err != nil {
 		errs = append(errs, err)
 	} else if ok {
-		errs = append(errs, restorePlugins(ctx, r, claude, plugins)...)
+		errs = append(errs, restorePlugins(ctx, r, claude, plugins, step)...)
 	}
 
 	var mcp map[string]json.RawMessage
@@ -98,46 +105,81 @@ func RestoreClaude(ctx context.Context, r *runner.Runner, root string) (notes []
 	if ok, err := readJSON(filepath.Join(root, MCPFile), &mcp); err != nil {
 		errs = append(errs, err)
 	} else if ok {
-		n, e := restoreMCP(ctx, r, claude, mcp)
+		n, e := restoreMCP(ctx, r, claude, mcp, step)
 		notes, errs = append(notes, n...), append(errs, e...)
 	}
 
 	return notes, errs
 }
 
-func restorePlugins(ctx context.Context, r *runner.Runner, claude string, p Plugins) []error {
+// run executes c under claudeTimeout; read-only commands also run in dry-run mode.
+func run(ctx context.Context, r *runner.Runner, c runner.Cmd, read bool) (string, error) {
+	cctx, cancel := context.WithTimeout(ctx, claudeTimeout)
+	defer cancel()
+
+	var out string
+	var err error
+
+	if read {
+		out, err = r.Output(cctx, c)
+	} else {
+		var res runner.Result
+		res, err = r.Run(cctx, c)
+		out = res.Stdout
+	}
+
+	if err != nil && errors.Is(cctx.Err(), context.DeadlineExceeded) {
+		return out, context.DeadlineExceeded
+	}
+
+	return out, err
+}
+
+func failure(kind, id string, err error) error {
+	if errors.Is(err, context.DeadlineExceeded) {
+		return fmt.Errorf("%s %s: timed out after %s", kind, id, claudeTimeout)
+	}
+
+	return fmt.Errorf("%s %s: %w", kind, id, err)
+}
+
+func restorePlugins(ctx context.Context, r *runner.Runner, claude string, p Plugins, step func(string)) []error {
 	var errs []error
-	have, _ := r.Output(ctx, runner.Cmd{Name: claude, Args: []string{"plugin", "marketplace", "list"}})
+	have, _ := run(ctx, r, runner.Cmd{Name: claude, Args: []string{"plugin", "marketplace", "list"}}, true)
 
 	for _, m := range p.Marketplaces {
 		if listed(have)[m.Name] {
 			continue
 		}
 
-		if _, err := r.Run(ctx, runner.Cmd{Name: claude, Args: []string{"plugin", "marketplace", "add", m.Source}}); err != nil {
-			errs = append(errs, fmt.Errorf("marketplace %s: %w", m.Name, err))
+		step("claude-code marketplace " + m.Name)
+
+		if _, err := run(ctx, r, runner.Cmd{Name: claude, Args: []string{"plugin", "marketplace", "add", m.Source}}, false); err != nil {
+			errs = append(errs, failure("marketplace", m.Name, err))
 		}
 	}
 
-	installed, _ := r.Output(ctx, runner.Cmd{Name: claude, Args: []string{"plugin", "list"}})
+	installed, _ := run(ctx, r, runner.Cmd{Name: claude, Args: []string{"plugin", "list"}}, true)
 
 	for _, id := range p.Installed {
 		if listed(installed)[id] {
 			continue
 		}
 
-		if _, err := r.Run(ctx, runner.Cmd{Name: claude, Args: []string{"plugin", "install", id}}); err != nil {
-			errs = append(errs, fmt.Errorf("plugin %s: %w", id, err))
+		step("claude-code plugin " + id)
+
+		if _, err := run(ctx, r, runner.Cmd{Name: claude, Args: []string{"plugin", "install", id}}, false); err != nil {
+			errs = append(errs, failure("plugin", id, err))
 		}
 	}
 
 	return errs
 }
 
-func restoreMCP(ctx context.Context, r *runner.Runner, claude string, mcp map[string]json.RawMessage) ([]string, []error) {
+func restoreMCP(ctx context.Context, r *runner.Runner, claude string, mcp map[string]json.RawMessage, step func(string)) ([]string, []error) {
 	var notes []string
 	var errs []error
-	have, _ := r.Output(ctx, runner.Cmd{Name: claude, Args: []string{"mcp", "list"}})
+	have, _ := run(ctx, r, runner.Cmd{Name: claude, Args: []string{"mcp", "list"}}, true)
 
 	for _, name := range sortedKeys(mcp) {
 		cfg := mcp[name]
@@ -150,8 +192,10 @@ func restoreMCP(ctx context.Context, r *runner.Runner, claude string, mcp map[st
 			continue
 		}
 
-		if _, err := r.Run(ctx, runner.Cmd{Name: claude, Args: []string{"mcp", "add-json", "--scope", "user", name, string(local(cfg))}}); err != nil {
-			errs = append(errs, fmt.Errorf("mcp %s: %w", name, err))
+		step("claude-code MCP " + name)
+
+		if _, err := run(ctx, r, runner.Cmd{Name: claude, Args: []string{"mcp", "add-json", "--scope", "user", name, string(local(cfg))}}, false); err != nil {
+			errs = append(errs, failure("mcp", name, err))
 		}
 	}
 
