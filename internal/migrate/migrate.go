@@ -27,6 +27,11 @@ func Version(root string) (int, error) {
 		return 0, err
 	}
 
+	return VersionOf(data)
+}
+
+// VersionOf reads the version of a rehome.yml's contents.
+func VersionOf(data []byte) (int, error) {
 	var head struct {
 		Version int `yaml:"version"`
 	}

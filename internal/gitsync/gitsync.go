@@ -43,6 +43,29 @@ func (g Git) PushOnly(ctx context.Context, path string) error {
 	return g.run(ctx, path, "push")
 }
 
+func (g Git) Fetch(ctx context.Context, path string) error {
+	return g.run(ctx, path, "fetch", "--quiet")
+}
+
+// Upstream reads file as the last fetched upstream has it.
+func (g Git) Upstream(ctx context.Context, path, file string) ([]byte, error) {
+	return exec.CommandContext(ctx, "git", "-C", path, "show", "@{upstream}:"+file).Output()
+}
+
+// AbortRebase gives up a rebase a failed pull left half done; without one it does nothing.
+func (g Git) AbortRebase(ctx context.Context, path string) {
+	_ = exec.CommandContext(ctx, "git", "-C", path, "rebase", "--abort").Run()
+}
+
+// SetAside keeps HEAD on branch keep and moves the clone to the fetched upstream.
+func (g Git) SetAside(ctx context.Context, path, keep string) error {
+	if err := g.run(ctx, path, "branch", keep); err != nil {
+		return err
+	}
+
+	return g.run(ctx, path, "reset", "--hard", "--quiet", "@{upstream}")
+}
+
 func (g Git) RemoteURL(ctx context.Context, path string) (string, error) {
 	out, err := exec.CommandContext(ctx, "git", "-C", path, "remote", "get-url", "origin").Output()
 

@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -98,6 +99,10 @@ func runMigrate(cmd *cobra.Command) error {
 
 	if linked {
 		if err := publish(cmd, s, fmt.Sprintf("Migrate config to v%d", config.CurrentVersion)); err != nil {
+			if g, ok := src.(*source.Git); ok && g.MigratedUpstream(ctx, config.CurrentVersion) {
+				return adoptMigration(cmd, s, g)
+			}
+
 			return fmt.Errorf("migrated here, but publishing failed: %w; fix that and run rehome push", err)
 		}
 	}
@@ -105,4 +110,29 @@ func runMigrate(cmd *cobra.Command) error {
 	cmd.Printf("migrated to v%d as node %s; run rehome scan to refresh it\n", config.CurrentVersion, self.Name)
 
 	return nil
+}
+
+// adoptMigration: another machine published its migration first. This one is kept on a branch,
+// the clone takes the remote's config, and a scan adds this machine as a node.
+func adoptMigration(cmd *cobra.Command, s config.Settings, g *source.Git) error {
+	keep := "rehome-migration-" + time.Now().Format("20060102-150405")
+
+	if err := g.SetAside(cmd.Context(), keep); err != nil {
+		return fmt.Errorf("another machine migrated the config first, and taking its version failed: %w", err)
+	}
+
+	cmd.Printf("another machine migrated the config first; this machine's migration is kept on branch %s\n", keep)
+	scanned, err := syncScan(cmd, false)
+
+	if err != nil {
+		return err
+	}
+
+	if !scanned.Written {
+		cmd.Println("run rehome scan, then rehome push, to add this machine as a node")
+
+		return nil
+	}
+
+	return publishChecked(cmd, s, "")
 }
