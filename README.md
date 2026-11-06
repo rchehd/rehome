@@ -3,11 +3,12 @@
 Keep your workstation in sync across every machine you use.
 
 `rehome` keeps one portable config of your setup — apps, CLI tools, shell, app settings, AI tooling — in a private
-repo. Every linked machine, whatever its OS, can push its changes there and pull everyone else's: install a tool on
-your laptop, and `rehome sync` brings it to your desktop with the right package manager. A fresh machine gets the
-whole setup in one `sync`. Secrets stay in Bitwarden.
+repo, a folder or an archive. Each machine records what it has there as a node: its apps, their versions and its
+settings. From any machine you can browse the others and install what they have, whatever their OS, with the right
+package manager: set up a tool on your laptop, and `rehome install` on your desktop offers it. Secrets stay in
+Bitwarden.
 
-![Linked machines on Ubuntu, macOS and WSL push to and sync from one private config; a new machine syncs from it](.github/assets/rehome-flow.svg)
+![Linked machines on Ubuntu, macOS and WSL publish to one private config; a new machine installs from it](.github/assets/rehome-flow.svg)
 
 > Supports Ubuntu, Debian, macOS and Ubuntu/Debian on WSL.
 
@@ -65,52 +66,105 @@ On every other machine, new or already in use:
 
 ```bash
 rehome link git@github.com:you/rehome-config.git
-rehome sync                                         # pull the config and install what is missing
+rehome install                                      # pick a machine, then the apps to install here
 ```
 
-After you change something on any machine, share it with `rehome pull && rehome scan && rehome push`; the others pick
-it up with `rehome sync`.
+After you change something on any machine, run `rehome sync` there: it pulls, records this machine and publishes it.
+The other machines see the change in `rehome install`, and their own `rehome sync` updates the settings of the apps
+they already have.
 
 ## Commands
 
 ```bash
-rehome                      # interactive menu: Scan / Install / Sync / Status / Pull / Push
-rehome scan                 # detect software and settings, create or update the config
-rehome install              # checklist of what is missing, then install it
-rehome sync                 # pull the linked config and apply it with the install workflow
-rehome status               # check the linked source and local system (exit 1 if out of sync)
-rehome link <git-url>       # keep the config in your own private repo
-rehome push / rehome pull   # sync it between machines
+rehome                         # interactive menu: Scan / Install / Sync / Status / Pull / Push
+rehome scan                    # record this machine: apps, versions, settings; add recipes for new apps
+rehome install                 # pick a machine, then its apps to install here
+rehome install <app>…          # install by name; --all for every machine's apps, --from <machine> for one machine's
+rehome sync                    # pull, update settings of installed apps, record this machine and push
+rehome remove <app>            # uninstall here; --everywhere marks it removed on every machine
+rehome status                  # compare this machine with its record and the shared config (exit 1 if out of sync)
+rehome nodes                   # list the machines; nodes rename / nodes forget
+rehome link <repo|folder|archive>
+rehome push / rehome pull      # publish this machine / fetch the others
+rehome migrate                 # upgrade a config made by an older rehome
 ```
 
-Every command takes `--dry-run` and `--json`. `install` takes `--yes` for non-interactive runs, `--all` to reinstall
-what is present, `--overwrite-files` to replace differing settings (a `.rehome.bak` is kept).
+Every command takes `--dry-run` and `--json`. `install` and `sync` take `--yes` for non-interactive runs and
+`--overwrite-files` to replace differing settings (a `.rehome.bak` is kept).
 
 ## Where the config lives
 
-- a linked private git repo (`rehome link`) — the default once linked;
-- a folder with `rehome.yml` and `files/`: `--config ~/backup/rehome-config` (USB stick, archive, anything);
-- a single file: `--config ./rehome.yml` (settings come from `files/` next to it);
-- a URL: `--config https://…/rehome.yml` (app list only; you are warned it is not your repo).
+`rehome link` takes one of:
 
-See [examples/rehome.example.yml](examples/rehome.example.yml) for the format.
+- a private git repo — machines pull and push it;
+- a folder, written in place — a synced folder, a NAS or a USB stick;
+- a `.tar.gz` archive — a local path is rewritten on every push; an `https://` archive is read-only.
+
+For a one-off run, `--config` takes a folder, its `rehome.yml`, or an `https://…/rehome.yml` URL (recipes only;
+you are warned it is not your config).
+
+Inside, every machine writes only its own folder, so machines never conflict:
+
+```
+rehome.yml                  # recipes: how each app installs on each OS, shared by every machine
+nodes/<machine>/node.yml    # one machine: its system, apps with versions, and settings files
+nodes/<machine>/files/      # that machine's settings
+```
+
+See [examples/rehome.example.yml](examples/rehome.example.yml) for the recipe format.
 
 ## Keep several machines in sync
 
-Any machine can update the config after you install a new tool, and the others apply the update.
+### Machines are nodes
 
-- **With Git**, run `rehome link <git-url>` once on each machine. On the machine that changed, run `rehome pull`,
-  `rehome scan`, then `rehome push`. On the others, `rehome status` shows whether there is an update and
-  `rehome sync` pulls and applies it.
-- **With a file or folder**, start from the latest copy and run `rehome scan --config ./rehome-config` on the machine
-  with changes. Share the updated `rehome.yml` with the `files/` next to it (settings) and `rehome.lock` (versions).
-  On the receiving machine, run `rehome sync --config ./rehome-config` (the folder or its `rehome.yml`).
+A node is one machine's record, named after its hostname. `rehome scan` (and `rehome sync`) update it; `rehome push`
+publishes it. `rehome nodes` lists them with when each last published; `rehome nodes rename <node> <name>` renames
+one, and `rehome nodes forget <node>` drops a machine you no longer have. A node silent for 90 days is stale: its
+apps stay out of `install --all` unless you pass `--include-stale` (set `stale_after_days` in
+`~/.config/rehome/settings.yml` to change that).
 
-If scan lists a tool as an unknown binary, add an install method and enable it before sharing the config.
-`rehome status` reports the linked Git branch and the local system separately; with `--config` it compares the
-supplied config with the local system. The default view shows a short table of counts and next steps, plus up to
-four version differences. Use `rehome status --interactive` to browse categories with search and scrolling.
-The Status item in the main menu opens the same browser.
+### Install from another machine
+
+`rehome install` in a terminal lists the machines, with how many apps each has that this one does not. Open one to
+see its apps; Tab switches between all, missing here, can install, installed and no recipe. Space selects, `v`
+switches between the same version as that machine and the latest, `s` leaves an app's settings out, and `r` writes a
+recipe for an app this OS has no installer for. The line under the list says where the version and settings come
+from, or why an app cannot be installed. Enter shows the plan before anything runs; Esc goes back to the machines.
+
+Without the picker:
+
+- `rehome install htop jq` — named apps, from whichever machine has them;
+- `rehome install --all` — everything the live machines have;
+- `rehome install --from laptop` — everything that machine has, with its versions and settings;
+- `--prefer laptop` takes versions and settings from that machine first when several have an app;
+- `--no-settings` installs the apps alone; `--reinstall` installs again what is present.
+
+Settings come from `--from`, else the first `--prefer` machine that has them, else the machine that published them
+most recently on the same OS. After an install, rehome offers to publish this machine (`--push` or `--no-push`).
+
+### Sync
+
+`rehome sync` pulls, applies the newest settings of the apps already installed here (asking before it replaces a
+file you changed), records this machine and publishes it. It never installs new apps; `rehome install` does that.
+`--no-apply` only exchanges the records, and `--no-push` keeps this machine's record local.
+
+### Remove an app
+
+`rehome remove <app>` uninstalls it here and drops it from this machine's record. With `--everywhere` it is also
+marked removed for every machine: `install --all` skips it, and `rehome sync` on the others offers to remove it.
+Installing it again by name lifts the mark.
+
+### Check status
+
+`rehome status` reports the config source, this machine's record and the local system:
+
+- **This node** says whether the system differs from the record (`rehome scan` updates it) and whether the record
+  has changes not published yet (`rehome push`);
+- **Gone from this node** lists apps the record has that are no longer installed.
+
+The default view shows a short table of counts and next steps, plus up to four version differences. Use
+`rehome status --interactive` to browse categories with search and scrolling. The Status item in the main menu opens
+the same browser.
 
 | Command | View |
 | --- | --- |
@@ -123,17 +177,12 @@ In the browser, Tab / Shift+Tab switches categories, ↑ / ↓ and Page Up / Pag
 current category (including file paths), Enter opens an item's details, Esc goes back, and `q` quits. It is a
 read-only snapshot. `--interactive` requires a terminal and cannot be combined with `--details` or `--json`.
 
-Version columns are **ON MACHINE** and **IN CONFIG**. An older installed version offers `rehome install --upgrade`;
-a newer local version offers `rehome scan` to record it before publishing. Explicit pins are marked `(pin)`, Git
-installs show commits, and unreadable versions show `unknown`. `status` reads version data without changing the
-config; `scan` writes the versions it can read to `rehome.lock`.
+Version columns are **ON MACHINE** and **IN CONFIG** (the newest any machine recorded). An older installed
+version offers `rehome install --upgrade`; a newer local version offers `rehome scan` to record it before
+publishing. Explicit pins are marked `(pin)`, Git installs show commits, and unreadable versions show `unknown`.
 
 Missing-app details include the expected package manager or detection path. An APT zsh plugin and an Oh My Zsh
 clone are separate installs when the config expects different paths.
-
-To publish local tools and settings, run `rehome scan`, review the result, then `rehome push` for a linked repo.
-To apply the shared config on this machine, run `rehome sync`. For a file or folder, `rehome scan --config <path>`
-saves local changes. Share the updated folder yourself, then apply that copy with `rehome sync --config <path>`.
 
 ## What it picks up
 
@@ -144,7 +193,8 @@ saves local changes. Share the updated folder yourself, then apply that copy wit
 - **Settings:** zsh, oh-my-zsh custom, fonts, git, gh, Sublime Text, JetBrains, kitty, Ghostty, Zed, Claude Code
   and Codex (rules, hooks, MCP servers, plugins), SSH config and `known_hosts`
 - **GNOME:** on Linux with `dconf-cli`, desktop, Shell, Mutter, keyboard shortcut and GNOME Terminal preferences
-- **Unknown binaries** are listed disabled, so nothing is lost; add an install method to enable them
+- **Unknown binaries** are kept in this machine's record, so nothing is lost; add a recipe
+  (`rehome config add-install`) to install them elsewhere
 
 Settings of apps outside the catalog are found automatically in the usual places (`~/.config/<app>`, `~/.<app>`,
 `~/.<app>rc`, flatpak and snap config dirs), skipping caches, logs and databases. They are recorded under `capture`
@@ -204,24 +254,29 @@ above 128 MiB. For an older Cursor store without its workspace path, supply its 
 ## Linux, macOS and WSL
 
 A config made on Ubuntu installs on a Mac (and the other way round) without you looking up package names. When an
-app has no installer for the current OS, rehome finds one: the built-in catalog first, then the same name in Homebrew
-or apt, then known renames (`fd-find` → `fd`), then [Repology](https://repology.org). The plan marks these as
-auto-mapped, and the next `rehome scan` on that machine records them. Apps that do not exist on the other OS are listed
-with what to add; `--offline` keeps the lookup to the local package index. Homebrew is installed first if it is missing.
+app has no recipe for the current OS, rehome finds one: the built-in catalog first, then the same npm, pipx, uv,
+cargo or Go package the other OS uses, then the same name in Homebrew or apt, then known renames (`fd-find` → `fd`),
+then [Repology](https://repology.org). The plan marks these as auto-mapped, and the next `rehome scan` on that
+machine records them. `--offline` keeps the lookup to the local package index. Homebrew is installed first if it is
+missing.
 
-WSL uses the same config as Ubuntu and Debian. rehome restores terminal tools and their settings and points you to
-Windows for catalogued graphical apps and fonts; for your own graphical apps, set `group: desktop`. GNOME settings are
-skipped on WSL, and Snap and Flatpak are used only when systemd is running. Scanning WSL does not mark intentionally
-skipped apps as missing in the shared config.
+An app that cannot be installed is listed with the reason: no recipe for this OS (with the command to add one, or
+`r` in the picker), an apt repo it needs, a package built for another architecture, a package manager missing here,
+or a graphical app on WSL.
+
+WSL uses the same recipes as Ubuntu and Debian. rehome restores terminal tools and their settings and points you to
+Windows for catalogued graphical apps and fonts; for your own graphical apps, set `group: desktop`. GNOME settings
+are skipped on WSL, and Snap and Flatpak are used only when systemd is running.
 
 ## Versions
 
-`rehome scan` also writes `rehome.lock` next to the config, with the version of every app it can read. On install:
+Every machine's record holds the version of each app it can read. On install you choose the same versions as the
+other machines or the latest (`--version same|latest`; asked in a terminal, otherwise latest):
 
-- with a lock you choose the same versions or the latest (`--versions locked|latest`); without a lock you get the latest;
-- a pinned version that is no longer available is replaced by the latest, and the report says so;
-- installed apps are never downgraded; older ones are listed, and `--upgrade` (or `u` in the checklist) raises them;
-- `version: 1.2.3` on an app pins it permanently; `--lock <file>` uses a lock kept elsewhere.
+- the same version is installed only where the package manager can install a fixed one — npm, pipx, uv, cargo, Go,
+  and apt while the repo still has it; elsewhere the plan says why it takes the latest;
+- installed apps are never downgraded; older ones are listed, and `--upgrade` (or `u` in the picker) raises them;
+- `version: 1.2.3` on an app pins it permanently.
 
 Keep apps off an OS or a machine:
 
@@ -232,6 +287,15 @@ apps:
 ignore:
   my-laptop: [docker, php8.1]
 ```
+
+## Upgrade a config from rehome 0.1
+
+`rehome update` runs `rehome migrate` once the new version is installed, and any command on an old config offers to.
+`rehome migrate --dry-run` lists the changes first. The migration pulls first: if another machine has already
+migrated the shared config, this one only adds itself as a machine. Otherwise rehome turns the app list into recipes,
+moves this machine's versions, settings files and unknown binaries into its node, and publishes it as one commit
+(`git revert` undoes it); a folder or archive is backed up next to it as `.v1.bak`. If two machines migrate at the
+same time, the second keeps its own migration on a `rehome-migration-…` branch and takes the published one.
 
 ## Secrets from Bitwarden
 
@@ -246,7 +310,8 @@ is replaced only with `--overwrite-files`.
 
 ### A setting
 
-In your trusted local config, add a `bitwarden` reference to the file's existing mapping:
+In your trusted local config, add a `bitwarden` reference to the file's existing mapping in the machine's
+`nodes/<machine>/node.yml` (paths are relative to that folder):
 
 ```yaml
 files:
@@ -258,17 +323,23 @@ files:
 
 Put one `<rehome:redacted>` marker in the template, for example `API_TOKEN='<rehome:redacted>'`.
 The reference uses the item's UUID and either a custom field name or `login.password`. Inline values support
-letters, digits and `._~+/=@%:-`. Once you add the reference, edit the template in the config repo directly;
+letters, digits and `._~+/=@%:-`. Once you add the reference, edit the template in the config directly;
 future scans leave it alone. The rendered file is written outside the config folder with permissions `0600`.
 
 ### An SSH key
 
-Use the UUID of a Bitwarden SSH Key item. The mapping stores only a reference and a filename:
+Use the UUID of a Bitwarden SSH Key item. The app goes in `rehome.yml`, and the mapping, which stores only a
+reference and a filename, in the machine's `node.yml`:
 
 ```yaml
+# rehome.yml
 apps:
   - id: ssh
     files: ssh
+```
+
+```yaml
+# nodes/<machine>/node.yml
 files:
   ssh:
     - dest: {linux: ~/.ssh/id_work, macos: ~/.ssh/id_work}

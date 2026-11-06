@@ -1,10 +1,10 @@
-version: 1
+version: 2
 apps:
   - id: google-chrome
     group: browsers
-    enabled: true
     install:
       debian: { apt: google-chrome-stable, repo: google-chrome }
+      macos: { cask: google-chrome }
   - id: phpstorm
     group: editors
     install:
@@ -17,21 +17,17 @@ apps:
     group: uncategorized
     install:
       debian: { apt: htop }
+      macos: { brew: htop }
   - id: zsh
     group: shell
     install:
       debian: { apt: zsh }
     files: zsh
-  - id: unknown-hermes # scan could not tell how this was installed
-    group: unknown
-    enabled: false
-    detected: { path: ~/.local/bin/hermes }
 
 apt_repos:
   google-chrome:
     source: files/apt/sources/google-chrome.sources
     keyring: files/apt/keyrings/google-chrome.gpg
 
-files:
-  zsh:
-    - { src: files/zsh/.zshrc, dest: { linux: ~/.zshrc, macos: ~/.zshrc } }
+ignore:
+  my-laptop: [phpstorm]
