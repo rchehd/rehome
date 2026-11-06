@@ -85,6 +85,8 @@ type Selection struct {
 	Latest []string
 	// Offline skips network lookups (Homebrew API, Repology) when mapping installers.
 	Offline bool
+	// NoSettings are apps installed without their settings files.
+	NoSettings []string
 }
 
 // Build resolves every app to a step in dependency order.
@@ -99,6 +101,10 @@ func Build(ctx context.Context, r *runner.Runner, cfg *config.Config, root strin
 	for _, app := range cfg.Apps {
 		if sel.IDs != nil && !slices.Contains(sel.IDs, app.ID) {
 			continue
+		}
+
+		if slices.Contains(sel.NoSettings, app.ID) {
+			app.Files = ""
 		}
 
 		step := resolveStep(ctx, r, cfg, app, p, sel, res)

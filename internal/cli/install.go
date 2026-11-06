@@ -70,30 +70,28 @@ func newInstallCmd() *cobra.Command {
 			defer restore()
 
 			req := app.InstallRequest{IDs: args, From: f.from, Prefer: f.prefer, IncludeStale: f.includeStale, NoSettings: f.noSettings}
-			in, plan, err := buildPlan(cmd, req, install.Selection{All: f.reinstall, Offline: f.offline}, f)
-
-			if err != nil {
-				return err
-			}
-
-			if flags.json {
-				return installJSON(cmd, plan, options, req)
-			}
-
+			sel := install.Selection{All: f.reinstall, Offline: f.offline}
+			var in *app.InstallInput
 			var rep *install.Report
 
-			switch {
-			case picker:
-				rep, err = installInteractive(cmd, in, plan, options, func(mode string) (*app.InstallInput, *install.Plan, error) {
-					f.version = mode
+			if picker {
+				in, rep, err = installPicker(cmd, req, sel, f, options)
+			} else {
+				var plan *install.Plan
 
-					return buildPlan(cmd, req, install.Selection{All: f.reinstall, Offline: f.offline}, f)
-				})
-			case !f.yes:
-				rep, err = confirmAndRun(cmd, plan, options)
-			default:
-				printPlan(cmd, plan)
-				rep, err = executePlan(cmd, plan, options)
+				if in, plan, err = buildPlan(cmd, req, sel, f); err != nil {
+					return err
+				}
+
+				switch {
+				case flags.json:
+					return installJSON(cmd, plan, options, req)
+				case !f.yes:
+					rep, err = confirmAndRun(cmd, plan, options)
+				default:
+					printPlan(cmd, plan)
+					rep, err = executePlan(cmd, plan, options)
+				}
 			}
 
 			if err != nil || rep == nil {
@@ -195,45 +193,101 @@ func confirmAndRun(cmd *cobra.Command, plan *install.Plan, options install.Optio
 	return executePlan(cmd, plan, options)
 }
 
-// installInteractive: checklist of what the nodes have, then the summary, then the run; a recipe
-// added from the checklist reloads the config and opens it again.
-func installInteractive(cmd *cobra.Command, in *app.InstallInput, plan *install.Plan, options install.Options, reload func(mode string) (*app.InstallInput, *install.Plan, error)) (*install.Report, error) {
+// installPicker: the nodes, then the chosen node's apps, then the summary and the run. esc in the
+// checklist goes back to the nodes; a recipe added from it reloads the config and reopens it.
+func installPicker(cmd *cobra.Command, req app.InstallRequest, sel install.Selection, f installFlags, options install.Options) (*app.InstallInput, *install.Report, error) {
+nodes:
 	for {
-		res, ok, err := tui.Checklist(plan)
+		rows, err := nodeRows(cmd)
+
+		if err != nil {
+			return nil, nil, err
+		}
+
+		name, ok, err := tui.Nodes(rows)
 
 		if err != nil || !ok {
-			return nil, err
+			return nil, nil, err
 		}
 
-		if res.AddRecipe != "" {
-			if err := addRecipe(in, res.AddRecipe); err != nil {
-				cmd.PrintErrln("error:", err)
+		req.From = name
+		in, plan, err := buildPlan(cmd, req, sel, f)
+
+		if err != nil {
+			return nil, nil, err
+		}
+
+		f.version = plan.Mode
+
+		for {
+			res, ok, err := tui.Checklist(plan, tui.ChecklistOptions{Source: name, Back: true})
+
+			switch {
+			case err != nil || !ok:
+				return nil, nil, err
+			case res.Back:
+				continue nodes
+			case res.AddRecipe != "":
+				if err := addRecipe(in, res.AddRecipe); err != nil {
+					cmd.PrintErrln("error:", err)
+				}
+
+				if in, plan, err = buildPlan(cmd, req, sel, f); err != nil {
+					return nil, nil, err
+				}
+
+				continue
+			case len(res.Selection.IDs) == 0:
+				cmd.Println("nothing selected")
+
+				return in, nil, nil
 			}
 
-			if in, plan, err = reload(plan.Mode); err != nil {
-				return nil, err
+			chosen := res.Selection
+			chosen.All, chosen.Offline = sel.All, sel.Offline
+
+			if plan, err = app.BuildPlan(cmd.Context(), opts(cmd), in, chosen); err != nil {
+				return nil, nil, err
 			}
 
-			continue
+			options.UpgradeIDs = res.Upgrades
+			rep, err := confirmAndRun(cmd, plan, options)
+
+			return in, rep, err
 		}
-
-		if len(res.Selection.IDs) == 0 {
-			cmd.Println("nothing selected")
-
-			return nil, nil
-		}
-
-		sel := res.Selection
-		sel.All, sel.Offline = plan.Reinstall, plan.Offline
-
-		if plan, err = app.BuildPlan(cmd.Context(), opts(cmd), in, sel); err != nil {
-			return nil, err
-		}
-
-		options.UpgradeIDs = res.Upgrades
-
-		return confirmAndRun(cmd, plan, options)
 	}
+}
+
+// nodeRows describes every node for the picker, with how many of its apps this machine lacks.
+func nodeRows(cmd *cobra.Command) ([]tui.NodeRow, error) {
+	w, err := app.LoadWorkspace(opts(cmd))
+
+	if err != nil {
+		return nil, err
+	}
+
+	var rows []tui.NodeRow
+	now := time.Now()
+
+	for _, n := range w.All() {
+		r := tui.NodeRow{Name: n.Name, System: n.System, Seen: seen(n.LastSeen, now), This: n.ID == w.Self.ID, Stale: n.Stale(now, w.Settings.StaleAfter())}
+
+		for id, e := range n.Apps {
+			if e.Unsupported {
+				continue
+			}
+
+			r.Apps++
+
+			if _, ok := w.Self.Apps[id]; !ok {
+				r.Missing++
+			}
+		}
+
+		rows = append(rows, r)
+	}
+
+	return rows, nil
 }
 
 // addRecipe asks how id installs on this platform and writes it to rehome.yml.

@@ -2,13 +2,18 @@ package tui
 
 import (
 	"fmt"
+	"path/filepath"
+	"slices"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/rchehd/rehome/internal/config"
 	"github.com/rchehd/rehome/internal/install"
 	"github.com/rchehd/rehome/internal/lock"
 )
+
+const statusSkipped = "skipped"
 
 var statusLabels = map[string]string{
 	install.StatusInstall:     "missing",
@@ -16,14 +21,33 @@ var statusLabels = map[string]string{
 	install.StatusInstalled:   "installed",
 	install.StatusUnavailable: "n/a",
 	install.StatusDisabled:    "disabled",
+	statusSkipped:             "skipped",
+}
+
+type tab struct {
+	name  string
+	match func(install.Step) bool
+}
+
+var tabs = []tab{
+	{"all", func(install.Step) bool { return true }},
+	{"missing here", func(s install.Step) bool { return s.Status != install.StatusInstalled }},
+	{"can install", func(s install.Step) bool {
+		return s.Status == install.StatusInstall || s.Status == install.StatusFilesOnly
+	}},
+	{"installed", func(s install.Step) bool { return s.Status == install.StatusInstalled }},
+	{"no recipe", func(s install.Step) bool {
+		return s.Code == install.ReasonNoRecipe || (s.Status == statusSkipped && strings.HasPrefix(s.Reason, "no recipe"))
+	}},
 }
 
 type item struct {
 	step    install.Step
 	checked bool
 	// latest overrides the source node's version for this app; upgrade raises it to that version.
-	latest  bool
-	upgrade bool
+	latest     bool
+	upgrade    bool
+	noSettings bool
 }
 
 type row struct {
@@ -32,6 +56,10 @@ type row struct {
 }
 
 type checklist struct {
+	plan      *install.Plan
+	opts      ChecklistOptions
+	tab       int
+	back      bool
 	items     []*item
 	groups    []string
 	cursor    int
@@ -43,16 +71,24 @@ type checklist struct {
 	recipe    string
 }
 
-// ChecklistResult is the user's choice: the apps to install and upgrade, or an app to write a recipe for first.
+// ChecklistOptions name the node the plan comes from; Back lets esc return to the node list.
+type ChecklistOptions struct {
+	Source string
+	Back   bool
+}
+
+// ChecklistResult is the user's choice: the apps to install and upgrade, an app to write a recipe
+// for first, or Back to the node list.
 type ChecklistResult struct {
 	Selection install.Selection
 	Upgrades  []string
 	AddRecipe string
+	Back      bool
 }
 
 // Checklist lets the user pick what to install; missing apps start checked. ok is false when cancelled.
-func Checklist(plan *install.Plan) (ChecklistResult, bool, error) {
-	m := &checklist{height: 20}
+func Checklist(plan *install.Plan, opts ChecklistOptions) (ChecklistResult, bool, error) {
+	m := &checklist{plan: plan, opts: opts, height: 20}
 	seen := map[string]bool{}
 
 	for _, s := range plan.Steps {
@@ -66,10 +102,13 @@ func Checklist(plan *install.Plan) (ChecklistResult, bool, error) {
 		it := &item{step: s, checked: checked}
 		m.items = append(m.items, it)
 
-		if g := groupOf(s); !seen[g] {
-			seen[g] = true
-			m.groups = append(m.groups, g)
-		}
+		m.addGroup(groupOf(s), seen)
+	}
+
+	for _, c := range plan.Skipped {
+		s := install.Step{App: config.App{ID: c.ID}, Status: statusSkipped, Reason: c.Reason}
+		m.items = append(m.items, &item{step: s})
+		m.addGroup(groupOf(s), seen)
 	}
 
 	final, err := tea.NewProgram(m).Run()
@@ -82,6 +121,10 @@ func Checklist(plan *install.Plan) (ChecklistResult, bool, error) {
 
 	if m.cancelled {
 		return ChecklistResult{}, false, nil
+	}
+
+	if m.back {
+		return ChecklistResult{Back: true}, true, nil
 	}
 
 	if m.recipe != "" {
@@ -103,9 +146,20 @@ func Checklist(plan *install.Plan) (ChecklistResult, bool, error) {
 		if it.upgrade {
 			upgrades = append(upgrades, it.step.App.ID)
 		}
+
+		if it.noSettings {
+			sel.NoSettings = append(sel.NoSettings, it.step.App.ID)
+		}
 	}
 
 	return ChecklistResult{Selection: sel, Upgrades: upgrades}, true, nil
+}
+
+func (m *checklist) addGroup(g string, seen map[string]bool) {
+	if !seen[g] {
+		seen[g] = true
+		m.groups = append(m.groups, g)
+	}
 }
 
 func (m *checklist) Init() tea.Cmd { return nil }
@@ -113,7 +167,7 @@ func (m *checklist) Init() tea.Cmd { return nil }
 func (m *checklist) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		m.height = max(5, msg.Height-6)
+		m.height = max(5, msg.Height-9)
 	case tea.KeyPressMsg:
 		if m.filtering {
 			m.updateFilter(msg.String())
@@ -131,10 +185,28 @@ func (m *checklist) updateKey(key string) tea.Cmd {
 	rows := m.rows()
 
 	switch key {
-	case "ctrl+c", "q", "esc":
+	case "ctrl+c", "q":
 		m.cancelled = true
 
 		return tea.Quit
+	case "esc":
+		if m.filter != "" {
+			m.filter, m.cursor = "", 0
+
+			return nil
+		}
+
+		m.back, m.cancelled = m.opts.Back, !m.opts.Back
+
+		return tea.Quit
+	case "tab", "shift+tab":
+		step := 1
+
+		if key == "shift+tab" {
+			step = len(tabs) - 1
+		}
+
+		m.tab, m.cursor = (m.tab+step)%len(tabs), 0
 	case "enter":
 		m.done = true
 
@@ -164,6 +236,10 @@ func (m *checklist) updateKey(key string) tea.Cmd {
 	case "v":
 		if it := m.current(rows); it != nil && it.step.Pin != (lock.Entry{}) {
 			it.latest = !it.latest
+		}
+	case "s":
+		if it := m.current(rows); it != nil && m.hasSettings(it) {
+			it.noSettings = !it.noSettings
 		}
 	case "u":
 		if it := m.current(rows); it != nil && it.step.Upgrade != (lock.Entry{}) {
@@ -249,7 +325,53 @@ func (m *checklist) rows() []row {
 }
 
 func (m *checklist) matches(it *item) bool {
-	return m.filter == "" || strings.Contains(it.step.App.ID, strings.ToLower(m.filter))
+	return tabs[m.tab].match(it.step) &&
+		(m.filter == "" || strings.Contains(it.step.App.ID, strings.ToLower(m.filter)))
+}
+
+// hasSettings reports whether the app brings settings files that can be left out.
+func (m *checklist) hasSettings(it *item) bool {
+	s := it.step
+
+	return s.App.Files != "" && len(m.plan.Config.Files[s.App.Files]) > 0 &&
+		s.Status != install.StatusFilesOnly && selectable(it)
+}
+
+// note explains the current app: why it cannot be installed, which version and whose settings it gets.
+func (m *checklist) note(it *item) string {
+	s := it.step
+
+	if s.Status == install.StatusUnavailable || s.Status == statusSkipped || s.Status == install.StatusDisabled {
+		return s.Reason
+	}
+
+	var parts []string
+
+	if from := m.plan.From[s.App.ID]; from != "" {
+		parts = append(parts, "from "+from)
+	}
+
+	switch {
+	case s.Pin != (lock.Entry{}) && it.latest:
+		parts = append(parts, "latest instead of @"+pinText(s.Pin))
+	case s.Pin != (lock.Entry{}):
+		parts = append(parts, "same version @"+pinText(s.Pin)+" (v for latest)")
+	case s.PinNote != "":
+		parts = append(parts, "latest: "+s.PinNote)
+	}
+
+	switch {
+	case s.Status == install.StatusFilesOnly:
+		parts = append(parts, "settings only, from "+filepath.Base(m.plan.FilesRoot(s.App.Files)))
+	case !m.hasSettings(it):
+		parts = append(parts, "no settings recorded")
+	case it.noSettings:
+		parts = append(parts, "without settings (s to include)")
+	default:
+		parts = append(parts, "settings from "+filepath.Base(m.plan.FilesRoot(s.App.Files))+" (s to leave out)")
+	}
+
+	return strings.Join(parts, " · ")
 }
 
 func (m *checklist) View() tea.View {
@@ -263,7 +385,14 @@ func (m *checklist) View() tea.View {
 		}
 	}
 
-	b.WriteString(titleStyle.Render(fmt.Sprintf("rehome install — %d selected", selected)) + "\n")
+	source := "all nodes"
+
+	if m.opts.Source != "" {
+		source = "from " + m.opts.Source
+	}
+
+	b.WriteString(titleStyle.Render(fmt.Sprintf("rehome install — %s — %d selected", source, selected)) + "\n")
+	b.WriteString(m.tabBar() + "\n")
 
 	if m.filtering || m.filter != "" {
 		b.WriteString("filter: " + m.filter + "▏\n")
@@ -281,11 +410,55 @@ func (m *checklist) View() tea.View {
 		b.WriteString(line + "\n")
 	}
 
-	b.WriteString(helpStyle.Render("↑/↓ move · space toggle · a group · v same/latest · u upgrade · r add recipe · / filter · enter continue · q quit"))
+	if len(rows) == 0 {
+		b.WriteString(dimStyle.Render("  nothing here") + "\n")
+	}
+
+	note := ""
+
+	if it := m.current(rows); it != nil {
+		note = m.note(it)
+	}
+
+	back := "q quit"
+
+	if m.opts.Back {
+		back = "esc nodes · q quit"
+	}
+
+	b.WriteString(dimStyle.Render(note) + "\n")
+	b.WriteString(helpStyle.Render("↑/↓ move · space toggle · a group · tab filter · / search · enter continue · "+back) + "\n")
+	b.WriteString(helpStyle.Render("v same/latest · s settings · u upgrade · r add recipe"))
 	v := tea.NewView(b.String())
 	v.AltScreen = true
 
 	return v
+}
+
+func (m *checklist) tabBar() string {
+	var parts []string
+
+	for i, t := range tabs {
+		n := 0
+
+		for _, it := range m.items {
+			if t.match(it.step) {
+				n++
+			}
+		}
+
+		label := fmt.Sprintf("%s (%d)", t.name, n)
+
+		if i == m.tab {
+			label = cursorStyle.Render(" " + label + " ")
+		} else {
+			label = dimStyle.Render(" " + label + " ")
+		}
+
+		parts = append(parts, label)
+	}
+
+	return strings.Join(parts, " ")
 }
 
 func renderRow(r row) string {
@@ -299,6 +472,10 @@ func renderRow(r row) string {
 		box = "[x]"
 	}
 
+	if !selectable(r.item) {
+		box = "   "
+	}
+
 	s := r.item.step
 	label := statusLabels[s.Status]
 	detail := s.Reason
@@ -309,6 +486,10 @@ func renderRow(r row) string {
 
 	if s.Mapped != "" {
 		detail += " (auto)"
+	}
+
+	if r.item.noSettings {
+		detail += " · no settings"
 	}
 
 	if len(detail) > 60 {
@@ -351,7 +532,7 @@ func toggle(it *item) {
 }
 
 func selectable(it *item) bool {
-	return it.step.Status != install.StatusUnavailable
+	return !slices.Contains([]string{install.StatusUnavailable, statusSkipped}, it.step.Status)
 }
 
 func groupOf(s install.Step) string {
