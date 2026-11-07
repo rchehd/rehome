@@ -21,6 +21,7 @@ type Settings struct {
 	NodeName string `yaml:"node_name,omitempty"`
 	// StaleAfterDays hides nodes that have not pushed for this long from install --all; 0 means 90.
 	StaleAfterDays int `yaml:"stale_after_days,omitempty"`
+	LAN            LAN `yaml:"lan,omitempty"`
 }
 
 // StaleAfter is how long a node may stay silent before it counts as stale.
@@ -77,8 +78,9 @@ func NodeName(host string) string {
 	return name
 }
 
+// Linked reports whether this machine shares its config through a source or paired machines.
 func (s Settings) Linked() bool {
-	return s.RepoURL != "" && s.ClonePath != ""
+	return s.ClonePath != "" && (s.RepoURL != "" || len(s.LAN.Paired) > 0)
 }
 
 func LoadSettings() (Settings, error) {

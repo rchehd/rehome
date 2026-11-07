@@ -38,6 +38,10 @@ type Node struct {
 	Files map[string][]config.FileMap `yaml:"files,omitempty"`
 	// Unknown are binaries found here that no recipe knows, with where they were found.
 	Unknown map[string]map[string]string `yaml:"unknown,omitempty"`
+	// Key is the owner's LAN public key, named pubkey so the secret scan leaves it alone.
+	// Revision counts its scans, so peers keep the newest copy.
+	Key      string `yaml:"pubkey,omitempty"`
+	Revision int    `yaml:"revision,omitempty"`
 	// Path is the node's directory, the root its files/ paths resolve against.
 	Path string `yaml:"-"`
 }
@@ -102,7 +106,8 @@ func List(root string) ([]*Node, error) {
 	var nodes []*Node
 
 	for _, e := range entries {
-		if !e.IsDir() {
+		// Dot folders are scratch space, such as a LAN pull being unpacked.
+		if !e.IsDir() || strings.HasPrefix(e.Name(), ".") {
 			continue
 		}
 
@@ -122,6 +127,17 @@ func List(root string) ([]*Node, error) {
 	slices.SortFunc(nodes, func(a, b *Node) int { return strings.Compare(a.Name, b.Name) })
 
 	return nodes, nil
+}
+
+// FindID returns the node with this id; names are chosen by their owners, so only ids identify a machine.
+func FindID(nodes []*Node, id string) *Node {
+	for _, n := range nodes {
+		if n.ID == id {
+			return n
+		}
+	}
+
+	return nil
 }
 
 // Find returns the node with this id or name.

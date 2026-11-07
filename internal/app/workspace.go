@@ -66,7 +66,7 @@ func openWorkspace(cfg *config.Config, root string) (*Workspace, error) {
 		return nil, err
 	}
 
-	w.Self = node.Find(w.Nodes, w.Settings.NodeID)
+	w.Self = node.FindID(w.Nodes, w.Settings.NodeID)
 
 	if w.Self == nil {
 		name := node.FreeName(w.Nodes, w.Settings.NodeName, w.Settings.NodeID)
@@ -97,7 +97,7 @@ func (w *Workspace) Record(id string, e lock.Entry) {
 	w.Self.Apps[id] = e
 
 	if w.Root != "" {
-		if err := w.Self.Save(); err != nil {
+		if err := SaveNode(w.Self); err != nil {
 			fmt.Fprintf(os.Stderr, "warning: node %s: %v\n", w.Self.Name, err)
 		}
 	}
@@ -111,7 +111,7 @@ func TouchNode(root, id string) error {
 		return err
 	}
 
-	n := node.Find(nodes, id)
+	n := node.FindID(nodes, id)
 
 	if n == nil {
 		return nil
@@ -119,7 +119,7 @@ func TouchNode(root, id string) error {
 
 	n.LastSeen = time.Now().UTC().Truncate(time.Second)
 
-	return n.Save()
+	return SaveNode(n)
 }
 
 // NodeSeenWithin reports whether this machine's node was last seen less than d ago.
@@ -130,7 +130,7 @@ func NodeSeenWithin(root, id string, d time.Duration) bool {
 		return false
 	}
 
-	n := node.Find(nodes, id)
+	n := node.FindID(nodes, id)
 
 	return n != nil && !n.LastSeen.IsZero() && time.Since(n.LastSeen) < d
 }

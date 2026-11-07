@@ -85,6 +85,7 @@ rehome remove <app>            # uninstall here; --everywhere marks it removed o
 rehome status                  # compare this machine with its record and the shared config (exit 1 if out of sync)
 rehome nodes                   # list the machines; nodes rename / nodes forget
 rehome link <repo|folder|archive>
+rehome serve --pair / rehome link lan   # pair two machines on the local network; sync then pulls from each other
 rehome push / rehome pull      # publish this machine / fetch the others
 rehome migrate                 # upgrade a config made by an older rehome
 ```
@@ -149,6 +150,36 @@ out and why. After an install, rehome offers to publish this machine (`--push` o
 `rehome sync` pulls, applies the newest settings of the apps already installed here (asking before it replaces a
 file you changed), records this machine and publishes it. It never installs new apps; `rehome install` does that.
 `--no-apply` only exchanges the records, and `--no-push` keeps this machine's record local.
+
+### Sync over a local network
+
+Machines on one network can also exchange their records directly, without a remote repo. Nothing runs in the
+background: a machine shares only while you run `rehome serve` or `rehome sync` on it.
+
+1. On the first machine: `rehome serve --pair`. It prints a 6-digit code, valid for 5 minutes and 3 tries.
+2. On the second: `rehome link lan` finds it on the network (or `rehome link lan 192.168.1.5:7474`) and asks for
+   the code. Pair each pair of machines once; after that no code is needed.
+3. From then on `rehome sync` on either machine takes the other's newer record and recipes while both run rehome.
+   `rehome serve --for 10m` keeps a machine reachable for that long; add it to cron if you want a schedule.
+
+`rehome nodes` adds an ONLINE column, and `rehome nodes unpair <node>` stops trusting a machine, for example one you
+sold or lost. A git repo and the LAN work together: a machine linked to both carries changes between them.
+
+What is protected:
+
+- Every connection is TLS 1.3 with both machines' keys checked; a device that never paired gets nothing.
+- Pairing uses CPace: the code is never sent, a man in the middle cannot pair, and guesses are limited.
+- Each machine signs its own record; another machine can pass it on but cannot change or forge it, and your own
+  record is never overwritten. Records are taken only from machines you paired with directly.
+- Peers only read. A recipe from another machine that runs code or adds a source (a script, a `.deb` URL, a tap or a
+  repo) is shown and added only after you say yes; capture rules are never taken from a peer.
+- Secrets never travel: records hold only redacted files, and a record with a secret-looking value is not shared.
+
+The full threat model is in [SECURITY.md](SECURITY.md).
+
+Limits: both machines must be on at the same time (a git repo covers the rest); the default port is 7474
+(`lan.port` in `~/.config/rehome/settings.yml`), and `rehome serve` prints the firewall command when one blocks it.
+Where mDNS does not work, such as WSL, list addresses under `lan.peers`.
 
 ### Remove an app
 

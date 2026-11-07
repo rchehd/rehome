@@ -11,6 +11,7 @@ import (
 
 	"github.com/rchehd/rehome/internal/app"
 	"github.com/rchehd/rehome/internal/config"
+	"github.com/rchehd/rehome/internal/lan"
 	"github.com/rchehd/rehome/internal/node"
 	"github.com/rchehd/rehome/internal/ui"
 )
@@ -24,6 +25,8 @@ type nodeRow struct {
 	LastSeen time.Time `json:"last_seen"`
 	This     bool      `json:"this"`
 	Stale    bool      `json:"stale"`
+	// Online is set only when this machine uses LAN sync: whether the node answers on the network now.
+	Online *bool `json:"online,omitempty"`
 }
 
 func newNodesCmd() *cobra.Command {
@@ -42,9 +45,15 @@ func newNodesCmd() *cobra.Command {
 
 			var rows []nodeRow
 			now := time.Now()
+			online := onlineNodes(cmd, w.Settings)
 
 			for _, n := range w.Nodes {
 				r := nodeRow{Name: n.Name, ID: n.ID, System: n.System, Platform: n.Platform, Apps: len(n.Apps), LastSeen: n.LastSeen, This: n.ID == w.Self.ID, Stale: n.Stale(now, w.Settings.StaleAfter())}
+
+				if online != nil && !r.This {
+					up := online[n.ID]
+					r.Online = &up
+				}
 
 				if !stale || r.Stale {
 					rows = append(rows, r)
@@ -73,16 +82,28 @@ func newNodesCmd() *cobra.Command {
 					note = "stale"
 				}
 
-				table = append(table, []string{r.Name, r.System, strconv.Itoa(r.Apps), seen(r.LastSeen, now), note})
+				row := []string{r.Name, r.System, strconv.Itoa(r.Apps), seen(r.LastSeen, now), note}
+
+				if online != nil {
+					row = append(row[:4], onlineLabel(r.Online), note)
+				}
+
+				table = append(table, row)
 			}
 
-			ui.New(cmd.OutOrStdout()).Table([]string{"NODE", "SYSTEM", "APPS", "LAST SEEN", ""}, table)
+			headers := []string{"NODE", "SYSTEM", "APPS", "LAST SEEN", ""}
+
+			if online != nil {
+				headers = []string{"NODE", "SYSTEM", "APPS", "LAST SEEN", "ONLINE", ""}
+			}
+
+			ui.New(cmd.OutOrStdout()).Table(headers, table)
 
 			return nil
 		},
 	}
 	cmd.Flags().BoolVar(&stale, "stale", false, "show only nodes that have not pushed for a long time")
-	cmd.AddCommand(newNodesRenameCmd(), newNodesForgetCmd())
+	cmd.AddCommand(newNodesRenameCmd(), newNodesForgetCmd(), newNodesUnpairCmd())
 
 	return cmd
 }
@@ -127,8 +148,13 @@ func newNodesRenameCmd() *cobra.Command {
 			}
 
 			n.Name, n.Path = name, dir
+			save := n.Save
 
-			if err := n.Save(); err != nil {
+			if n.ID == w.Self.ID {
+				save = func() error { return app.SaveNode(n) }
+			}
+
+			if err := save(); err != nil {
 				return err
 			}
 
@@ -249,4 +275,61 @@ func seen(t, now time.Time) string {
 	}
 
 	return fmt.Sprintf("%dd ago", int(d.Hours()/24))
+}
+
+// onlineNodes are the node ids answering on the LAN now; nil when this machine does not use LAN sync.
+func onlineNodes(cmd *cobra.Command, s config.Settings) map[string]bool {
+	if dir, err := lan.Dir(); err != nil || !lan.HasIdentity(dir) || flags.config != "" {
+		return nil
+	}
+
+	online := map[string]bool{}
+
+	for _, f := range lan.Browse(cmd.Context(), browseTimeout, nil) {
+		online[f.ID] = true
+	}
+
+	return online
+}
+
+func onlineLabel(up *bool) string {
+	switch {
+	case up == nil:
+		return ""
+	case *up:
+		return ui.Paint(ui.Done, "● online")
+	}
+
+	return ui.Muted("○ offline")
+}
+
+func newNodesUnpairCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "unpair <node>",
+		Short: "Stop trusting a machine paired over the LAN",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return unpair(cmd, args[0])
+		},
+	}
+}
+
+func unpair(cmd *cobra.Command, ref string) error {
+	s, err := config.LoadSettings()
+
+	if err != nil {
+		return err
+	}
+
+	if !s.Unpair(ref) {
+		return fmt.Errorf("%s is not paired with this machine", ref)
+	}
+
+	if err := s.Save(); err != nil {
+		return err
+	}
+
+	ui.New(cmd.OutOrStdout()).Done(fmt.Sprintf("unpaired %s; its node is no longer taken over the LAN", ref))
+
+	return nil
 }
