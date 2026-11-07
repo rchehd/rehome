@@ -143,5 +143,12 @@ else
   fail "install --from another node with its settings, remove --everywhere and the sync notice"
 fi
 
+echo "== LAN"
+if as_dev "bash /e2e/lan.sh /home/dev/rehome"; then
+  pass "pair over the LAN with a code, take a newer signed node, refuse an unpaired machine"
+else
+  fail "pair over the LAN with a code, take a newer signed node, refuse an unpaired machine"
+fi
+
 echo "== $failures failure(s)"
 [ "$failures" -eq 0 ]
