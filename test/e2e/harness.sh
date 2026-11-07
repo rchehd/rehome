@@ -1,5 +1,6 @@
 #!/bin/bash
 set -Eeuo pipefail
+# Checks end in || false: bash 3.2 on macOS ignores set -e for a failing [[ ]].
 
 rehome="$1"
 work="$(mktemp -d)"
@@ -33,14 +34,14 @@ chmod 755 "$HOME/.agents/skills/check/scripts/check.sh"
 printf 'sk-ant-abcdefghijklmnopqrstuvwxyz\n' > "$HOME/.cursor/agents/secret.md"
 
 PATH="$work/bin" "$rehome" scan --yes --json --config "$work/scanned" > "$work/default.json"
-[[ ! -e "$captured/claude-code/skills/check/SKILL.md" ]]
-[[ ! -e "$captured/codex/agents/review.md" ]]
-[[ ! -e "$captured/cursor-agent-data/agents/review.md" ]]
-[[ ! -e "$captured/shared-agent-skills/skills/check/SKILL.md" ]]
+[[ ! -e "$captured/claude-code/skills/check/SKILL.md" ]] || false
+[[ ! -e "$captured/codex/agents/review.md" ]] || false
+[[ ! -e "$captured/cursor-agent-data/agents/review.md" ]] || false
+[[ ! -e "$captured/shared-agent-skills/skills/check/SKILL.md" ]] || false
 
 PATH="$work/bin" "$rehome" scan --yes --json --harness-data --config "$work/scanned" > "$work/scan.json"
 for id in claude-code codex cursor-agent-data shared-agent-skills; do
-  [[ -f "$captured/$id/skills/check/SKILL.md" ]]
+  [[ -f "$captured/$id/skills/check/SKILL.md" ]] || false
 done
 grep -q '<rehome:redacted>' "$captured/cursor-agent-data/agents/secret.md"
 
@@ -66,12 +67,12 @@ YAML
 export HOME="$work/target" XDG_CONFIG_HOME="$work/target-config" XDG_STATE_HOME="$work/target-state"
 mkdir -p "$HOME"
 PATH="$work/bin" "$rehome" sync --yes --offline --config "$work/restore" > "$work/default-restore.log"
-[[ ! -e "$HOME/.cursor/agents/review.md" && ! -e "$HOME/.agents/skills/check/SKILL.md" ]]
+[[ ! -e "$HOME/.cursor/agents/review.md" && ! -e "$HOME/.agents/skills/check/SKILL.md" ]] || false
 
 PATH="$work/bin" "$rehome" sync --yes --offline --harness-data --config "$work/restore" > "$work/restore.log"
 cmp -s "$work/source/.cursor/agents/review.md" "$HOME/.cursor/agents/review.md"
 cmp -s "$work/source/.agents/skills/check/SKILL.md" "$HOME/.agents/skills/check/SKILL.md"
-[[ -x "$HOME/.agents/skills/check/scripts/check.sh" ]]
+[[ -x "$HOME/.agents/skills/check/scripts/check.sh" ]] || false
 
 printf 'local edit\n' > "$HOME/.cursor/agents/review.md"
 PATH="$work/bin" "$rehome" install --all --yes --offline --harness-data --config "$work/restore" > "$work/repeat.log"
