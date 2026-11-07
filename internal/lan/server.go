@@ -12,7 +12,6 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -368,21 +367,4 @@ func (c *slotConn) Close() error {
 	c.once.Do(c.release)
 
 	return c.Conn.Close()
-}
-
-// NodeDir is where the node with id lives under root, if it is there.
-func NodeDir(root, id string) (string, bool) {
-	nodes, err := node.List(root)
-
-	if err != nil {
-		return "", false
-	}
-
-	for _, n := range nodes {
-		if n.ID == id {
-			return n.Path, true
-		}
-	}
-
-	return filepath.Join(root, node.Dir), false
 }
