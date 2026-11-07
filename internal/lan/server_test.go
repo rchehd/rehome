@@ -14,6 +14,7 @@ import (
 
 	"github.com/rchehd/rehome/internal/config"
 	"github.com/rchehd/rehome/internal/node"
+	"github.com/rchehd/rehome/internal/secrets"
 )
 
 func trust(keys ...ed25519.PublicKey) func(ed25519.PublicKey) bool {
@@ -210,6 +211,14 @@ func TestServerSkipsFolderChangedSinceSigning(t *testing.T) {
 
 	if _, err := f.client().Node(context.Background(), f.addr, "a"); err == nil {
 		t.Fatal("served the changed folder")
+	}
+}
+
+func TestSignedNodePassesTheSecretCheck(t *testing.T) {
+	f := newFixture(t)
+
+	if findings, err := secrets.ScanDir(filepath.Join(f.root, node.Dir, "a")); err != nil || len(findings) != 0 {
+		t.Fatalf("a signed node looks like it holds secrets, so push and serve would refuse it: %+v %v", findings, err)
 	}
 }
 

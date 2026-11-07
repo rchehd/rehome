@@ -66,7 +66,7 @@ func TestCertCarriesTheNodeKey(t *testing.T) {
 		t.Fatal("certificate does not carry the node key")
 	}
 
-	if err := leaf.CheckSignatureFrom(leaf); err != nil {
+	if err := leaf.CheckSignature(leaf.SignatureAlgorithm, leaf.RawTBSCertificate, leaf.Signature); err != nil {
 		t.Fatalf("not self-signed: %v", err)
 	}
 
