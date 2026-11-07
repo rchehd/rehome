@@ -36,6 +36,8 @@ type Result struct {
 	SkipMissing map[string]bool
 	// Attention lists what scan could not take by itself, each with an action for the user.
 	Attention []discover.Warning
+	// BaseSkipped counts manually marked apt packages left out as base system, libraries or language data.
+	BaseSkipped int
 }
 
 type Options struct {
@@ -94,6 +96,10 @@ func Run(ctx context.Context, r *runner.Runner, p platform.Platform, cat *catalo
 		}
 
 		s.addAll(found)
+
+		if a.Name() == "apt" && err == nil {
+			s.res.BaseSkipped = apt.ManualCount(ctx, r) - len(found)
+		}
 	}
 
 	if p.Key() == "debian" && adapter.HasCmd("apt-mark") {

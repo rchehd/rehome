@@ -85,6 +85,10 @@ func printScanSummary(cmd *cobra.Command, sp *app.ScanPlan) {
 	out.Header(sp.Node.Node.Name, sp.Node.Node.System, fmt.Sprintf("%d apps recorded", len(sp.Node.Node.Apps)))
 	out.Section("Apps", "")
 	out.List(appItems(out, rep, sp.Node.Gone, unknown)...)
+
+	if r.BaseSkipped > 0 {
+		out.List(ui.Item{Mark: ui.Plain, Text: ui.Muted(fmt.Sprintf("%d base system packages, libraries and language data skipped", r.BaseSkipped))})
+	}
 	printSettings(out, r)
 	printSecrets(out, r.Findings)
 	printAttention(out, r.Attention, r.Warnings)

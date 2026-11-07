@@ -93,6 +93,17 @@ func (Apt) Scan(ctx context.Context, r *runner.Runner) ([]adapter.Detected, erro
 	return found, nil
 }
 
+// ManualCount is how many packages apt has marked as installed by hand.
+func ManualCount(ctx context.Context, r *runner.Runner) int {
+	out, err := r.Output(ctx, runner.Cmd{Name: "apt-mark", Args: []string{"showmanual"}})
+
+	if err != nil {
+		return 0
+	}
+
+	return len(adapter.Lines(out))
+}
+
 func (Apt) Installed(ctx context.Context, r *runner.Runner, s config.InstallSpec) (bool, error) {
 	out, err := r.Output(ctx, runner.Cmd{Name: "dpkg-query", Args: []string{"-W", "-f=${db:Status-Status}", s.Apt}})
 
