@@ -11,6 +11,7 @@ import (
 	"github.com/rchehd/rehome/internal/config"
 	"github.com/rchehd/rehome/internal/secrets"
 	"github.com/rchehd/rehome/internal/source"
+	"github.com/rchehd/rehome/internal/ui"
 )
 
 var errNotLinked = errors.New("no linked config repo: run rehome link <git-url>")
@@ -75,15 +76,26 @@ func publishChecked(cmd *cobra.Command, s config.Settings, message string) error
 	return publish(cmd, s, message)
 }
 
-// publish marks this machine's node as seen now and sends the config to its source.
+// refreshSeen is how often a push with nothing else to publish still records that this machine is alive.
+const refreshSeen = 7 * 24 * time.Hour
+
+// publish marks this machine's node as seen now and sends the config to its source; with nothing new it sends nothing.
 func publish(cmd *cobra.Command, s config.Settings, message string) error {
+	src := source.Open(s, flags.dryRun, cmd.ErrOrStderr())
+
+	if !src.Unpublished(cmd.Context(), ".") && app.NodeSeenWithin(s.ClonePath, s.NodeID, refreshSeen) {
+		ui.New(cmd.OutOrStdout()).Done("nothing to publish")
+
+		return nil
+	}
+
 	if !flags.dryRun {
 		if err := app.TouchNode(s.ClonePath, s.NodeID); err != nil {
 			return err
 		}
 	}
 
-	return source.Open(s, flags.dryRun, cmd.ErrOrStderr()).Publish(cmd.Context(), message)
+	return src.Publish(cmd.Context(), message)
 }
 
 func linkedSettings() (config.Settings, error) {

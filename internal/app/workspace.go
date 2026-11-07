@@ -122,6 +122,19 @@ func TouchNode(root, id string) error {
 	return n.Save()
 }
 
+// NodeSeenWithin reports whether this machine's node was last seen less than d ago.
+func NodeSeenWithin(root, id string, d time.Duration) bool {
+	nodes, err := node.List(root)
+
+	if err != nil {
+		return false
+	}
+
+	n := node.Find(nodes, id)
+
+	return n != nil && !n.LastSeen.IsZero() && time.Since(n.LastSeen) < d
+}
+
 // All is every node, this machine's included even before its first scan.
 func (w *Workspace) All() []*node.Node {
 	if slices.Contains(w.Nodes, w.Self) {
