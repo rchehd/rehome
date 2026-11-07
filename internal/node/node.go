@@ -38,6 +38,9 @@ type Node struct {
 	Files map[string][]config.FileMap `yaml:"files,omitempty"`
 	// Unknown are binaries found here that no recipe knows, with where they were found.
 	Unknown map[string]map[string]string `yaml:"unknown,omitempty"`
+	// Key is the owner's LAN public key; Revision counts its scans, so peers keep the newest copy.
+	Key      string `yaml:"key,omitempty"`
+	Revision int    `yaml:"revision,omitempty"`
 	// Path is the node's directory, the root its files/ paths resolve against.
 	Path string `yaml:"-"`
 }
