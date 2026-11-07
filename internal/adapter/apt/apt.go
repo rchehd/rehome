@@ -262,15 +262,22 @@ func IsOfficial(uri string) bool {
 
 // Binaries lists the commands a package installs; their names hint where settings live.
 func Binaries(ctx context.Context, r *runner.Runner, pkg string) []string {
-	out, err := r.Output(ctx, runner.Cmd{Name: "dpkg", Args: []string{"-L", "--", pkg}})
+	name, _, _ := strings.Cut(pkg, ":")
+	files, ok := packageFiles(name)
 
-	if err != nil {
-		return nil
+	if !ok {
+		out, err := r.Output(ctx, runner.Cmd{Name: "dpkg", Args: []string{"-L", "--", pkg}})
+
+		if err != nil {
+			return nil
+		}
+
+		files = adapter.Lines(out)
 	}
 
 	var bins []string
 
-	for _, l := range adapter.Lines(out) {
+	for _, l := range files {
 		for _, dir := range []string{"/usr/bin/", "/usr/sbin/", "/usr/games/", "/bin/"} {
 			if name, ok := strings.CutPrefix(l, dir); ok && name != "" && !strings.Contains(name, "/") {
 				bins = append(bins, name)
