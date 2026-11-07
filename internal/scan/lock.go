@@ -15,6 +15,7 @@ import (
 // can be read, the installed version.
 func Versions(ctx context.Context, r *runner.Runner, cfg *config.Config, found map[string]bool, p platform.Platform) map[string]lock.Entry {
 	entries := map[string]lock.Entry{}
+	batches := map[string]map[string]lock.Entry{}
 
 	for _, app := range cfg.Apps {
 		if cfg.Ignored(app, p.Key(), config.ThisNode()) {
@@ -27,7 +28,7 @@ func Versions(ctx context.Context, r *runner.Runner, cfg *config.Config, found m
 			continue
 		}
 
-		if e, ok := version(ctx, r, spec); ok {
+		if e, ok := version(ctx, r, spec, batches); ok {
 			entries[app.ID] = e
 		}
 	}
@@ -35,7 +36,8 @@ func Versions(ctx context.Context, r *runner.Runner, cfg *config.Config, found m
 	return entries
 }
 
-func version(ctx context.Context, r *runner.Runner, spec config.InstallSpec) (lock.Entry, bool) {
+// version reads spec's installed version; batches holds each batch-capable manager's one read.
+func version(ctx context.Context, r *runner.Runner, spec config.InstallSpec, batches map[string]map[string]lock.Entry) (lock.Entry, bool) {
 	a, err := all.ByManager(spec)
 
 	if err != nil {
@@ -43,6 +45,23 @@ func version(ctx context.Context, r *runner.Runner, spec config.InstallSpec) (lo
 	}
 
 	e := lock.Entry{}
+
+	if b, ok := a.(adapter.BatchVersioner); ok {
+		got, read := batches[a.Name()]
+
+		if !read {
+			got = b.Versions(ctx, r)
+			batches[a.Name()] = got
+		}
+
+		if got != nil {
+			_, pkg := spec.Manager()
+			e = got[pkg]
+			e.Manager = a.Name()
+
+			return e, true
+		}
+	}
 
 	if v, ok := a.(adapter.Versioner); ok {
 		if got, err := v.Version(ctx, r, spec); err == nil {

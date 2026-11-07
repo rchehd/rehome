@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 
+	"github.com/rchehd/rehome/internal/adapter"
 	"github.com/rchehd/rehome/internal/config"
 	"github.com/rchehd/rehome/internal/lock"
 	"github.com/rchehd/rehome/internal/runner"
@@ -23,6 +24,25 @@ func (Apt) Version(ctx context.Context, r *runner.Runner, s config.InstallSpec) 
 	}
 
 	return lock.Entry{Version: version}, nil
+}
+
+func (Apt) Versions(ctx context.Context, r *runner.Runner) map[string]lock.Entry {
+	out, err := r.Output(ctx, runner.Cmd{Name: "dpkg-query", Args: []string{"-W", "-f=${binary:Package}\t${Package}\t${db:Status-Status}\t${Version}\n"}})
+
+	if err != nil {
+		return nil
+	}
+
+	entries := map[string]lock.Entry{}
+
+	for _, l := range adapter.Lines(out) {
+		if f := strings.Split(l, "\t"); len(f) == 4 && f[2] == "installed" {
+			entries[f[0]] = lock.Entry{Version: f[3]}
+			entries[f[1]] = lock.Entry{Version: f[3]}
+		}
+	}
+
+	return entries
 }
 
 func (Apt) InstallVersion(ctx context.Context, r *runner.Runner, s config.InstallSpec, e lock.Entry) error {

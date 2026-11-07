@@ -32,6 +32,11 @@ type Adapter interface {
 }
 
 // Versioner reports the installed version (or git commit) of a spec; empty when absent.
+// BatchVersioner reads every installed package's version in one call, keyed by package name; nil means unreadable.
+type BatchVersioner interface {
+	Versions(ctx context.Context, r *runner.Runner) map[string]lock.Entry
+}
+
 type Versioner interface {
 	Version(ctx context.Context, r *runner.Runner, s config.InstallSpec) (lock.Entry, error)
 }

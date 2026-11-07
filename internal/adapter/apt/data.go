@@ -83,27 +83,34 @@ func isDataPackage(name, section string) bool {
 
 // shipsProgram reports whether a package installs a command, a launcher or an /opt tree; unknown packages count as programs.
 func shipsProgram(name string) bool {
+	files, ok := packageFiles(name)
+
+	return !ok || slices.ContainsFunc(files, programPath.MatchString)
+}
+
+// packageFiles reads the paths dpkg recorded for a package; ok is false when it has no readable file list.
+func packageFiles(name string) ([]string, bool) {
 	lists, _ := filepath.Glob(filepath.Join(dpkgInfoDir, name+".list"))
 	archLists, _ := filepath.Glob(filepath.Join(dpkgInfoDir, name+":*.list"))
 	lists = append(lists, archLists...)
 
 	if len(lists) == 0 {
-		return true
+		return nil, false
 	}
+
+	var files []string
 
 	for _, path := range lists {
 		lines, err := readLines(path)
 
 		if err != nil {
-			return true
+			return nil, false
 		}
 
-		if slices.ContainsFunc(lines, programPath.MatchString) {
-			return true
-		}
+		files = append(files, lines...)
 	}
 
-	return false
+	return files, true
 }
 
 // requested returns the packages named on an apt install command line in the apt history.

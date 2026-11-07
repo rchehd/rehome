@@ -3,6 +3,7 @@ package config
 import (
 	"regexp"
 	"strings"
+	"sync"
 )
 
 const OriginAuto = "auto"
@@ -39,8 +40,21 @@ func anyGlob(patterns []string, rel string) bool {
 	return false
 }
 
+// globs caches compiled patterns: scan matches the same few globs against thousands of paths.
+var globs sync.Map
+
 // GlobRegexp compiles a path glob: ** spans directories, * and ? stay within one.
 func GlobRegexp(pattern string) *regexp.Regexp {
+	if re, ok := globs.Load(pattern); ok {
+		return re.(*regexp.Regexp)
+	}
+
+	re, _ := globs.LoadOrStore(pattern, compileGlob(pattern))
+
+	return re.(*regexp.Regexp)
+}
+
+func compileGlob(pattern string) *regexp.Regexp {
 	var b strings.Builder
 	b.WriteString("^")
 

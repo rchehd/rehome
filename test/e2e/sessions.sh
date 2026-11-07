@@ -1,5 +1,6 @@
 #!/bin/bash
 set -Eeuo pipefail
+# Checks end in || false: bash 3.2 on macOS ignores set -e for a failing [[ ]].
 
 rehome="$1"
 work="$(mktemp -d)"
@@ -44,10 +45,10 @@ mkdir -p "$HOME/.cursor/acp-sessions/$id"
 cp "$cursor/store.db" "$cursor/meta.json" "$HOME/.cursor/acp-sessions/$id/"
 
 PATH="$work/bin" "$rehome" scan --yes --json --config "$work/scanned" > "$work/default.json"
-[[ ! -e "$captured/claude-code-sessions" && ! -e "$captured/cursor-sessions" ]]
+[[ ! -e "$captured/claude-code-sessions" && ! -e "$captured/cursor-sessions" ]] || false
 PATH="$work/bin" "$rehome" scan --sessions --yes --json --config "$work/scanned" > "$work/scan.json"
 for kind in claude-code codex cursor; do
-  [[ -d "$captured/$kind-sessions" ]]
+  [[ -d "$captured/$kind-sessions" ]] || false
 done
 if grep -rq 'sk-ant-abcdefghijklmnopqrstuvwxyz' "$work/scanned"; then
   echo "Session capture kept a secret" >&2
@@ -60,7 +61,7 @@ if PATH="$work/bin" "$rehome" status --sessions --json --config "$work/scanned" 
   echo "Status did not report missing sessions" >&2
   exit 1
 else
-  [[ "$?" == 1 ]]
+  [[ "$?" == 1 ]] || false
 fi
 grep -q 'session missing:' "$work/status.json"
 mv "$work/held-projects" "$HOME/.claude/projects"
@@ -69,16 +70,16 @@ export HOME="$work/target" XDG_CONFIG_HOME="$work/target-config" XDG_STATE_HOME=
 export CURSOR_CONFIG_DIR="$HOME/.cursor"
 mkdir -p "$HOME"
 PATH="$work/bin" "$rehome" sync --yes --offline --config "$work/scanned" > "$work/default-restore.log"
-[[ ! -e "$HOME/.claude/projects" && ! -e "$HOME/.cursor/chats" ]]
+[[ ! -e "$HOME/.claude/projects" && ! -e "$HOME/.cursor/chats" ]] || false
 PATH="$work/bin" "$rehome" sync --sessions --session-path-map "/rehome-session-project=$work/target-project" --yes --offline --config "$work/scanned" > "$work/restore.log"
 claude_session="$(find "$HOME/.claude/projects" -name "$id.jsonl")"
 codex_session="$(find "$HOME/.codex/sessions" -name "*$id.jsonl")"
 cursor_db="$(find "$HOME/.cursor/chats" -name store.db)"
-[[ -f "$HOME/.cursor/acp-sessions/$id/store.db" ]]
+[[ -f "$HOME/.cursor/acp-sessions/$id/store.db" ]] || false
 grep -q "$work/target-project" "$claude_session"
 grep -q "$work/target-project" "$codex_session"
-[[ "$(sqlite3 "$cursor_db" 'SELECT count(*) FROM blobs')" == 3 ]]
-[[ "$(sqlite3 "$cursor_db" "SELECT count(*) FROM blobs WHERE instr(CAST(data AS TEXT),'sk-ant-')>0")" == 0 ]]
+[[ "$(sqlite3 "$cursor_db" 'SELECT count(*) FROM blobs')" == 3 ]] || false
+[[ "$(sqlite3 "$cursor_db" "SELECT count(*) FROM blobs WHERE instr(CAST(data AS TEXT),'sk-ant-')>0")" == 0 ]] || false
 printf 'local history\n' >> "$claude_session"
 PATH="$work/bin" "$rehome" sync --sessions --session-path-map "/rehome-session-project=$work/target-project" --yes --offline --config "$work/scanned" > "$work/repeat.log"
 grep -q 'local history' "$claude_session"

@@ -36,6 +36,8 @@ type Result struct {
 	SkipMissing map[string]bool
 	// Attention lists what scan could not take by itself, each with an action for the user.
 	Attention []discover.Warning
+	// BaseSkipped counts manually marked apt packages left out as base system, libraries or language data.
+	BaseSkipped int
 }
 
 type Options struct {
@@ -94,6 +96,10 @@ func Run(ctx context.Context, r *runner.Runner, p platform.Platform, cat *catalo
 		}
 
 		s.addAll(found)
+
+		if a.Name() == "apt" && err == nil {
+			s.res.BaseSkipped = apt.ManualCount(ctx, r) - len(found)
+		}
 	}
 
 	if p.Key() == "debian" && adapter.HasCmd("apt-mark") {
@@ -128,6 +134,7 @@ func Run(ctx context.Context, r *runner.Runner, p platform.Platform, cat *catalo
 		}
 	}
 
+	s.addScriptRecipes()
 	progress.Step(ctx, "looking for installed tools")
 	bins, err := binaries.Resolve(ctx, r, cat, known)
 
@@ -229,6 +236,34 @@ func (s *scanner) add(d adapter.Detected) {
 	}
 
 	s.apps[app.ID] = app
+}
+
+// addScriptRecipes records the user's own script recipes whose binary is here; no package manager reports them.
+func (s *scanner) addScriptRecipes() {
+	for _, app := range s.existing.Apps {
+		spec, ok := app.Spec(s.p.Key())
+
+		if !ok || spec.Script == "" || spec.Bin == "" || s.res.SkipMissing[app.ID] {
+			continue
+		}
+
+		if _, known := s.cat.Get(app.ID); known {
+			continue
+		}
+
+		if _, have := s.apps[app.ID]; have || !adapter.BinExists(spec.Bin) {
+			continue
+		}
+
+		found := &config.App{ID: app.ID, Group: app.Group, Install: maps.Clone(app.Install), Requires: app.Requires, PostInstall: app.PostInstall}
+
+		// captureFiles reads Files as a catalog entry; the user's own capture rules are found by app id instead.
+		if _, ok := s.cat.Get(app.Files); ok {
+			found.Files = app.Files
+		}
+
+		s.apps[app.ID] = found
+	}
 }
 
 // recipeFor finds the user's recipe for a package installed without a repo, e.g. a .deb or a dropped source.
