@@ -182,14 +182,14 @@ func confirmKey(shared []byte) ([]byte, error) {
 	return hkdf.Expand(sha256.New, shared, pairLabel+" confirm", 32)
 }
 
-// mac authenticates parts as length-prefixed fields under label.
+// mac authenticates parts under label; hashing each part first keeps the fields unambiguous.
 func mac(key []byte, label string, parts ...[]byte) []byte {
 	h := hmac.New(sha256.New, key)
 	h.Write([]byte(label))
 
 	for _, p := range parts {
-		h.Write([]byte{byte(len(p) >> 24), byte(len(p) >> 16), byte(len(p) >> 8), byte(len(p))})
-		h.Write(p)
+		sum := sha256.Sum256(p)
+		h.Write(sum[:])
 	}
 
 	return h.Sum(nil)

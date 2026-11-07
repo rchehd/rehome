@@ -42,7 +42,7 @@ func Dir() (string, error) {
 // LoadIdentity reads the key in dir, creating it on first use.
 func LoadIdentity(dir string) (*Identity, error) {
 	path := filepath.Join(dir, keyFile)
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) // #nosec G304 -- the LAN key file in rehome's own config dir
 
 	if errors.Is(err, os.ErrNotExist) {
 		return createIdentity(dir)
@@ -101,7 +101,7 @@ func createIdentity(dir string) (*Identity, error) {
 		return nil, err
 	}
 
-	if err := os.Chmod(dir, 0o700); err != nil {
+	if err := os.Chmod(dir, 0o700); err != nil { // #nosec G302 -- a directory: 0700 is owner-only
 		return nil, err
 	}
 

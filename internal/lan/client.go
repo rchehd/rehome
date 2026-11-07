@@ -30,7 +30,7 @@ func (c *Client) tlsConfig(pinned bool) *tls.Config {
 	return &tls.Config{
 		MinVersion:         tls.VersionTLS13,
 		Certificates:       []tls.Certificate{c.Self.Cert},
-		InsecureSkipVerify: true, //nolint:gosec // peers are authenticated by pinned key in VerifyConnection
+		InsecureSkipVerify: true, // #nosec G402 -- self-signed peers; VerifyConnection checks the pinned key
 		VerifyConnection: func(cs tls.ConnectionState) error {
 			key, ok := PeerKey(cs)
 

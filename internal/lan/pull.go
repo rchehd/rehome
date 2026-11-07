@@ -113,7 +113,7 @@ func pullNode(ctx context.Context, o PullOptions, addr string, e NodeEntry, have
 func install(root, id string, revision int, data []byte, key []byte) error {
 	dir := filepath.Join(root, node.Dir)
 
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o755); err != nil { // #nosec G301 -- config repo folders are world-readable, like git clones
 		return err
 	}
 
@@ -218,7 +218,7 @@ func mergeRecipes(o PullOptions, data []byte, rep *PullReport) error {
 	}
 
 	path := config.FilePath(o.Root)
-	existing, err := os.ReadFile(path)
+	existing, err := os.ReadFile(path) // #nosec G304 -- this machine's own rehome.yml
 
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
@@ -259,7 +259,7 @@ func mergeRecipes(o PullOptions, data []byte, rep *PullReport) error {
 	}
 
 	if !bytes.Equal(merged, existing) {
-		if err := os.WriteFile(path, merged, 0o644); err != nil {
+		if err := os.WriteFile(path, merged, 0o644); err != nil { // #nosec G703 G306 -- this machine's own rehome.yml, shared and world-readable like the rest of the config repo
 			return err
 		}
 	}

@@ -40,18 +40,19 @@ type signedManifest struct {
 
 func BuildManifest(dir, id string, revision int) (Manifest, error) {
 	m := Manifest{ID: id, Revision: revision, Files: []File{}}
-	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
+	root, err := os.OpenRoot(dir)
 
-		rel, err := filepath.Rel(dir, path)
+	if err != nil {
+		return m, err
+	}
 
-		if err != nil {
-			return err
-		}
+	defer root.Close()
 
+	fsys := root.FS()
+	err = fs.WalkDir(fsys, ".", func(rel string, d fs.DirEntry, err error) error {
 		switch {
+		case err != nil:
+			return err
 		case d.IsDir():
 			return nil
 		case !d.Type().IsRegular():
@@ -60,14 +61,14 @@ func BuildManifest(dir, id string, revision int) (Manifest, error) {
 			return nil
 		}
 
-		data, err := os.ReadFile(path)
+		data, err := fs.ReadFile(fsys, rel)
 
 		if err != nil {
 			return err
 		}
 
 		sum := sha256.Sum256(data)
-		m.Files = append(m.Files, File{Path: filepath.ToSlash(rel), Size: int64(len(data)), SHA256: hex.EncodeToString(sum[:])})
+		m.Files = append(m.Files, File{Path: rel, Size: int64(len(data)), SHA256: hex.EncodeToString(sum[:])})
 
 		return nil
 	})
@@ -98,12 +99,12 @@ func SignFolder(dir string, n *node.Node, id *Identity) error {
 		return err
 	}
 
-	return os.WriteFile(filepath.Join(dir, SigFile), data, 0o644)
+	return os.WriteFile(filepath.Join(dir, SigFile), data, 0o644) // #nosec G306 -- node folders are world-readable, like the rest of the config repo
 }
 
 // ReadSigned returns a folder's signed manifest without checking it.
 func ReadSigned(dir string) ([]byte, error) {
-	return os.ReadFile(filepath.Join(dir, SigFile))
+	return os.ReadFile(filepath.Join(dir, SigFile)) // #nosec G304 -- a node folder inside the config repo
 }
 
 // VerifySigned checks a signed manifest against key and returns the manifest it covers.

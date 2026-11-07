@@ -83,7 +83,7 @@ func (s *Server) Serve(ctx context.Context, ln net.Listener) error {
 		IdleTimeout:       requestLimit,
 	}
 
-	go func() {
+	go func() { // #nosec G118 -- shuts down after ctx is done, so it needs a fresh context
 		<-ctx.Done()
 		shutdown, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
