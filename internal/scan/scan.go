@@ -255,7 +255,14 @@ func (s *scanner) addScriptRecipes() {
 			continue
 		}
 
-		s.apps[app.ID] = &config.App{ID: app.ID, Group: app.Group, Install: maps.Clone(app.Install), Requires: app.Requires, PostInstall: app.PostInstall, Files: app.Files}
+		found := &config.App{ID: app.ID, Group: app.Group, Install: maps.Clone(app.Install), Requires: app.Requires, PostInstall: app.PostInstall}
+
+		// captureFiles reads Files as a catalog entry; the user's own capture rules are found by app id instead.
+		if _, ok := s.cat.Get(app.Files); ok {
+			found.Files = app.Files
+		}
+
+		s.apps[app.ID] = found
 	}
 }
 
