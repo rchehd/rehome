@@ -127,8 +127,13 @@ func newNodesRenameCmd() *cobra.Command {
 			}
 
 			n.Name, n.Path = name, dir
+			save := n.Save
 
-			if err := n.Save(); err != nil {
+			if n.ID == w.Self.ID {
+				save = func() error { return app.SaveNode(n) }
+			}
+
+			if err := save(); err != nil {
 				return err
 			}
 

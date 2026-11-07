@@ -97,7 +97,7 @@ func (w *Workspace) Record(id string, e lock.Entry) {
 	w.Self.Apps[id] = e
 
 	if w.Root != "" {
-		if err := w.Self.Save(); err != nil {
+		if err := SaveNode(w.Self); err != nil {
 			fmt.Fprintf(os.Stderr, "warning: node %s: %v\n", w.Self.Name, err)
 		}
 	}
@@ -119,7 +119,7 @@ func TouchNode(root, id string) error {
 
 	n.LastSeen = time.Now().UTC().Truncate(time.Second)
 
-	return n.Save()
+	return SaveNode(n)
 }
 
 // NodeSeenWithin reports whether this machine's node was last seen less than d ago.

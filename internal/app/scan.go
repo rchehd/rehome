@@ -128,7 +128,7 @@ func (sp *ScanPlan) Write(changes []files.Change) error {
 
 	sp.Node.Node.LastSeen = time.Now().UTC().Truncate(time.Second)
 
-	return sp.Node.Node.Save()
+	return SaveNode(sp.Node.Node)
 }
 
 func prepareNode(ctx context.Context, o Options, sp *ScanPlan, w *Workspace) (*NodePlan, error) {

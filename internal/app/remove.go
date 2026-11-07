@@ -114,7 +114,7 @@ func (p *RemovePlan) Run(ctx context.Context, o Options) ([]string, error) {
 	if _, ok := w.Self.Apps[p.ID]; ok && w.Root != "" {
 		delete(w.Self.Apps, p.ID)
 
-		if err := w.Self.Save(); err != nil {
+		if err := SaveNode(w.Self); err != nil {
 			return notes, err
 		}
 	}
