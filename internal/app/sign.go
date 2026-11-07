@@ -1,6 +1,7 @@
 package app
 
 import (
+	"github.com/rchehd/rehome/internal/config"
 	"github.com/rchehd/rehome/internal/lan"
 	"github.com/rchehd/rehome/internal/node"
 )
@@ -21,6 +22,10 @@ func SaveNode(n *node.Node) error {
 
 	n.Key = lan.EncodeKey(id.Public())
 	n.Revision++
+
+	if s, err := config.LoadSettings(); err == nil && s.LAN.OwnRevision >= n.Revision {
+		n.Revision = s.LAN.OwnRevision + 1
+	}
 
 	if err := n.Save(); err != nil {
 		return err

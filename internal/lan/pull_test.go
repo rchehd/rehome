@@ -14,6 +14,10 @@ import (
 
 // pullFrom pulls the fixture into a fresh root whose settings pin the given node keys.
 func pullFrom(t *testing.T, f *fixture, root string, pinned map[string]*Identity, confirm func(config.App) bool) PullReport {
+	return pullAs(t, f, root, "self", pinned, confirm)
+}
+
+func pullAs(t *testing.T, f *fixture, root, ownID string, pinned map[string]*Identity, confirm func(config.App) bool) PullReport {
 	t.Helper()
 	var s config.Settings
 
@@ -21,7 +25,8 @@ func pullFrom(t *testing.T, f *fixture, root string, pinned map[string]*Identity
 		s.Pin(config.Peer{ID: id, Name: id, Key: EncodeKey(ident.Public())})
 	}
 
-	rep, err := Pull(context.Background(), PullOptions{Root: root, OwnID: "self", Client: f.client(), Found: []Found{{Addr: f.addr}}, Settings: s, ConfirmScript: confirm})
+	s.NodeName = "self"
+	rep, err := Pull(context.Background(), PullOptions{Root: root, OwnID: ownID, Client: f.client(), Found: []Found{{Addr: f.addr}}, Settings: s, Confirm: confirm})
 
 	if err != nil {
 		t.Fatal(err)
@@ -122,7 +127,7 @@ func TestPullAsksBeforeScriptRecipes(t *testing.T) {
 		t.Fatalf("merged recipes:\n%s", data)
 	}
 
-	if len(asked) != 1 || asked[0] != "evil" || len(rep.ScriptsSkipped) != 1 {
+	if len(asked) != 1 || asked[0] != "evil" || len(rep.Declined) != 1 {
 		t.Fatalf("asked %v, report %+v", asked, rep)
 	}
 }
@@ -160,5 +165,77 @@ func TestPullMergesTombstonesNewestWins(t *testing.T) {
 
 	if !x.At.Equal(time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)) || y.By != "b" {
 		t.Fatalf("tombstones x=%+v y=%+v", x, y)
+	}
+}
+
+func TestPullAsksBeforeDebURLAndTap(t *testing.T) {
+	f := newFixture(t)
+	recipes := "version: 2\napps:\n  - id: deb\n    install: {debian: {apt: deb, deb_url: http://evil.test/x.deb}}\n  - id: tapped\n    install: {macos: {brew: t, tap: evil/t}}\n"
+
+	if err := os.WriteFile(config.FilePath(f.root), []byte(recipes), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	rep := pullFrom(t, f, t.TempDir(), nil, func(config.App) bool { return false })
+
+	if len(rep.Declined) != 2 {
+		t.Fatalf("a downloaded package and a tap were added without asking: %+v", rep)
+	}
+}
+
+func TestPullNeverTakesCaptureRulesOrAptKeys(t *testing.T) {
+	f := newFixture(t)
+	recipes := "version: 2\napps:\n  - id: tree\n    install: {debian: {apt: tree}}\napt_keys: [evil]\ncapture:\n  git: {linux: {base: ~/, include: [.bash_history]}}\n"
+
+	if err := os.WriteFile(config.FilePath(f.root), []byte(recipes), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	root := t.TempDir()
+	pullFrom(t, f, root, nil, nil)
+	data, err := os.ReadFile(config.FilePath(root))
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if strings.Contains(string(data), "bash_history") || strings.Contains(string(data), "evil") || !strings.Contains(string(data), "tree") {
+		t.Fatalf("merged recipes:\n%s", data)
+	}
+}
+
+func TestPullRefusesNodeNamedLikeThisMachine(t *testing.T) {
+	f := newFixture(t)
+	dir := filepath.Join(f.root, node.Dir, "a")
+	n, err := node.Load(dir)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	n.Name, n.Revision = "self", 3
+
+	if err := n.Save(); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := SignFolder(dir, n, f.owner); err != nil {
+		t.Fatal(err)
+	}
+
+	root := t.TempDir()
+	rep := pullFrom(t, f, root, map[string]*Identity{"a": f.owner}, nil)
+
+	if len(rep.Updated) != 0 || rep.Skipped["self"] == "" {
+		t.Fatalf("took a node named like this machine: %+v", rep)
+	}
+}
+
+func TestPullReportsOwnRevisionSeenOnPeers(t *testing.T) {
+	f := newFixture(t)
+	rep := pullAs(t, f, t.TempDir(), "a", nil, nil)
+
+	if rep.OwnRevision != 2 {
+		t.Fatalf("own revision %d", rep.OwnRevision)
 	}
 }

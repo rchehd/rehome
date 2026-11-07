@@ -5,12 +5,15 @@ import (
 	"io"
 	"net"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/rchehd/rehome/internal/config"
 	"github.com/rchehd/rehome/internal/lan"
 )
+
+var serverID = strings.Repeat("5", 32)
 
 func lanHome(t *testing.T, s config.Settings) {
 	t.Helper()
@@ -31,7 +34,7 @@ func pairingServer(t *testing.T) (string, *lan.Window) {
 	}
 
 	window := lan.OpenWindow(time.Now())
-	srv := &lan.Server{Root: t.TempDir(), Self: id, SelfPeer: config.Peer{ID: "id-s", Name: "s"}, Window: window, OnPair: func(config.Peer) error { return nil }}
+	srv := &lan.Server{Root: t.TempDir(), Self: id, SelfPeer: config.Peer{ID: serverID, Name: "s"}, Window: window, OnPair: func(config.Peer) error { return nil }}
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 
 	if err != nil {
@@ -47,7 +50,7 @@ func pairingServer(t *testing.T) (string, *lan.Window) {
 }
 
 func TestLinkLANKeepsGit(t *testing.T) {
-	lanHome(t, config.Settings{RepoURL: "git@example.test:me/config.git", ClonePath: t.TempDir(), NodeID: "id-b", NodeName: "b"})
+	lanHome(t, config.Settings{RepoURL: "git@example.test:me/config.git", ClonePath: t.TempDir(), NodeID: strings.Repeat("b", 32), NodeName: "b"})
 	addr, window := pairingServer(t)
 	cmd := newLinkCmd()
 	cmd.SetContext(context.Background())
@@ -67,7 +70,7 @@ func TestLinkLANKeepsGit(t *testing.T) {
 		t.Fatalf("git link lost: %q", s.RepoURL)
 	}
 
-	if _, ok := s.PairedKey("id-s"); !ok || !slices.Contains(s.LAN.Peers, addr) {
+	if _, ok := s.PairedKey(serverID); !ok || !slices.Contains(s.LAN.Peers, addr) {
 		t.Fatalf("pairing not saved: %+v", s.LAN)
 	}
 }

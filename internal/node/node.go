@@ -106,7 +106,8 @@ func List(root string) ([]*Node, error) {
 	var nodes []*Node
 
 	for _, e := range entries {
-		if !e.IsDir() {
+		// Dot folders are scratch space, such as a LAN pull being unpacked.
+		if !e.IsDir() || strings.HasPrefix(e.Name(), ".") {
 			continue
 		}
 
@@ -126,6 +127,17 @@ func List(root string) ([]*Node, error) {
 	slices.SortFunc(nodes, func(a, b *Node) int { return strings.Compare(a.Name, b.Name) })
 
 	return nodes, nil
+}
+
+// FindID returns the node with this id; names are chosen by their owners, so only ids identify a machine.
+func FindID(nodes []*Node, id string) *Node {
+	for _, n := range nodes {
+		if n.ID == id {
+			return n
+		}
+	}
+
+	return nil
 }
 
 // Find returns the node with this id or name.

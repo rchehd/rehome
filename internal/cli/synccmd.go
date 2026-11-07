@@ -286,7 +286,7 @@ func syncLAN(ctx context.Context, cmd *cobra.Command, s config.Settings, yes boo
 		return lan.PullReport{}, err
 	}
 
-	p, err := share(ctx, s, id, nil, cmd.ErrOrStderr())
+	p, err := share(ctx, s, id, nil, cmd.ErrOrStderr(), nil)
 
 	if err != nil {
 		cmd.PrintErrln("warning:", err, "— pulling without sharing")
@@ -294,37 +294,64 @@ func syncLAN(ctx context.Context, cmd *cobra.Command, s config.Settings, yes boo
 	}
 
 	client := &lan.Client{Self: id, Trusted: p.trusted}
-	rep, err := lan.Pull(ctx, lan.PullOptions{Root: s.ClonePath, OwnID: s.NodeID, Client: client, Found: peers(ctx, s), Settings: s, ConfirmScript: func(a config.App) bool {
-		return confirmScript(cmd, a, yes)
+	rep, err := lan.Pull(ctx, lan.PullOptions{Root: s.ClonePath, OwnID: s.NodeID, Client: client, Found: peers(ctx, s), Settings: s, Confirm: func(a config.App) bool {
+		return confirmRecipe(cmd, a, yes)
 	}})
 
-	if err == nil && !flags.json {
+	if err != nil {
+		return rep, err
+	}
+
+	if rep.OwnRevision > s.LAN.OwnRevision {
+		if err := saveOwnRevision(rep.OwnRevision); err != nil {
+			return rep, err
+		}
+	}
+
+	if !flags.json {
 		printLAN(cmd, rep)
 	}
 
-	return rep, err
+	return rep, nil
 }
 
-// confirmScript shows an install script a peer sent and asks before taking it.
-func confirmScript(cmd *cobra.Command, a config.App, yes bool) bool {
+// saveOwnRevision remembers how far peers saw this node, so the next save continues past it.
+func saveOwnRevision(revision int) error {
+	s, err := config.LoadSettings()
+
+	if err != nil {
+		return err
+	}
+
+	s.LAN.OwnRevision = max(s.LAN.OwnRevision, revision)
+
+	return s.Save()
+}
+
+// confirmRecipe shows what a peer's recipe would run or add, escaped, and asks before taking it.
+func confirmRecipe(cmd *cobra.Command, a config.App, yes bool) bool {
 	if yes || flags.json || !interactive() {
 		return false
 	}
 
 	var lines []ui.Item
 
-	for key, spec := range a.Install {
-		if spec.Script != "" {
-			lines = append(lines, ui.Item{Mark: ui.Attention, Text: key + ": " + spec.Script})
+	for _, key := range slices.Sorted(maps.Keys(a.Install)) {
+		spec := a.Install[key]
+
+		for label, v := range map[string]string{"script": spec.Script, "deb": spec.DebURL, "tap": spec.Tap, "repo": spec.Repo, "remote": spec.RemoteURL} {
+			if v != "" {
+				lines = append(lines, ui.Item{Mark: ui.Attention, Text: lan.Clean(key + " " + label + ": " + v)})
+			}
 		}
 	}
 
 	for _, c := range a.PostInstall {
-		lines = append(lines, ui.Item{Mark: ui.Attention, Text: "post install: " + c})
+		lines = append(lines, ui.Item{Mark: ui.Attention, Text: lan.Clean("post install: " + c)})
 	}
 
 	out := ui.New(cmd.OutOrStdout())
-	out.Section("Recipe "+a.ID+" from a paired machine runs", "")
+	out.Section("Recipe "+lan.Clean(a.ID)+" from a paired machine runs code or adds a source", "")
 	out.List(lines...)
 
 	return confirm(cmd, "Add this recipe?", false)
@@ -332,25 +359,26 @@ func confirmScript(cmd *cobra.Command, a config.App, yes bool) bool {
 
 func printLAN(cmd *cobra.Command, rep lan.PullReport) {
 	var items []ui.Item
+	clean := func(names []string) string { return lan.Clean(strings.Join(names, ", ")) }
 
 	if len(rep.Updated) > 0 {
-		items = append(items, ui.Item{Mark: ui.Add, Text: strings.Join(rep.Updated, ", "), Hint: "newer nodes taken"})
+		items = append(items, ui.Item{Mark: ui.Add, Text: clean(rep.Updated), Hint: "newer nodes taken"})
 	}
 
 	if len(rep.RecipesAdded) > 0 {
-		items = append(items, ui.Item{Mark: ui.Add, Text: strings.Join(slices.Compact(slices.Sorted(slices.Values(rep.RecipesAdded))), ", "), Hint: "recipes added"})
+		items = append(items, ui.Item{Mark: ui.Add, Text: clean(slices.Compact(slices.Sorted(slices.Values(rep.RecipesAdded)))), Hint: "recipes added"})
 	}
 
 	for _, name := range slices.Sorted(maps.Keys(rep.Skipped)) {
-		items = append(items, ui.Item{Mark: ui.Drop, Text: name, Hint: rep.Skipped[name]})
+		items = append(items, ui.Item{Mark: ui.Drop, Text: lan.Clean(name), Hint: lan.Clean(rep.Skipped[name])})
 	}
 
-	if len(rep.ScriptsSkipped) > 0 {
-		items = append(items, ui.Item{Mark: ui.Attention, Text: strings.Join(rep.ScriptsSkipped, ", "), Hint: "recipes with install scripts not taken"})
+	if len(rep.Declined) > 0 {
+		items = append(items, ui.Item{Mark: ui.Attention, Text: clean(rep.Declined), Hint: "recipes that run code or add sources, not taken"})
 	}
 
 	for _, u := range rep.Unreachable {
-		items = append(items, ui.Item{Mark: ui.Unknown, Text: u})
+		items = append(items, ui.Item{Mark: ui.Unknown, Text: lan.Clean(u)})
 	}
 
 	if len(items) == 0 {

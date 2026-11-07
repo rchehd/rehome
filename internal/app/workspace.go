@@ -66,7 +66,7 @@ func openWorkspace(cfg *config.Config, root string) (*Workspace, error) {
 		return nil, err
 	}
 
-	w.Self = node.Find(w.Nodes, w.Settings.NodeID)
+	w.Self = node.FindID(w.Nodes, w.Settings.NodeID)
 
 	if w.Self == nil {
 		name := node.FreeName(w.Nodes, w.Settings.NodeName, w.Settings.NodeID)
@@ -111,7 +111,7 @@ func TouchNode(root, id string) error {
 		return err
 	}
 
-	n := node.Find(nodes, id)
+	n := node.FindID(nodes, id)
 
 	if n == nil {
 		return nil
@@ -130,7 +130,7 @@ func NodeSeenWithin(root, id string, d time.Duration) bool {
 		return false
 	}
 
-	n := node.Find(nodes, id)
+	n := node.FindID(nodes, id)
 
 	return n != nil && !n.LastSeen.IsZero() && time.Since(n.LastSeen) < d
 }

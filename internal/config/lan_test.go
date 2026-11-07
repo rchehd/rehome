@@ -3,6 +3,7 @@ package config
 import (
 	"crypto/ed25519"
 	"encoding/base64"
+	"strings"
 	"testing"
 )
 
@@ -61,5 +62,36 @@ func TestLinkedWithLANOnly(t *testing.T) {
 
 	if !s.Linked() {
 		t.Fatal("not linked with a paired peer")
+	}
+}
+
+func TestCheckPinRefusesStandIns(t *testing.T) {
+	s := Settings{NodeID: strings.Repeat("a", 32)}
+	desk := Peer{ID: strings.Repeat("b", 32), Name: "desk", Key: testKey(t)}
+	s.Pin(desk)
+
+	for name, p := range map[string]Peer{
+		"bad id":         {ID: "desk", Name: "x", Key: testKey(t)},
+		"own id":         {ID: s.NodeID, Name: "x", Key: testKey(t)},
+		"pinned id":      {ID: desk.ID, Name: "x", Key: testKey(t)},
+		"key as another": {ID: strings.Repeat("c", 32), Name: "x", Key: desk.Key},
+	} {
+		if err := s.CheckPin(p); err == nil {
+			t.Errorf("%s: pinned", name)
+		}
+	}
+
+	if err := s.CheckPin(Peer{ID: strings.Repeat("c", 32), Name: "laptop", Key: testKey(t)}); err != nil {
+		t.Fatalf("refused a new machine: %v", err)
+	}
+}
+
+func TestUnpairByAmbiguousNameRemovesNothing(t *testing.T) {
+	var s Settings
+	s.Pin(Peer{ID: "id-a", Name: "laptop", Key: testKey(t)})
+	s.Pin(Peer{ID: "id-b", Name: "laptop", Key: testKey(t)})
+
+	if s.Unpair("laptop") || len(s.LAN.Paired) != 2 {
+		t.Fatalf("unpaired by an ambiguous name: %+v", s.LAN.Paired)
 	}
 }

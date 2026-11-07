@@ -15,22 +15,25 @@ import (
 	"github.com/rchehd/rehome/internal/node"
 )
 
-// PullOptions says where to pull into and from whom; ConfirmScript approves install scripts from peers.
+// PullOptions says where to pull into and from whom; Confirm approves recipes that run code or add sources.
 type PullOptions struct {
-	Root          string
-	OwnID         string
-	Client        *Client
-	Found         []Found
-	Settings      config.Settings
-	ConfirmScript func(app config.App) bool
+	Root     string
+	OwnID    string
+	Client   *Client
+	Found    []Found
+	Settings config.Settings
+	Confirm  func(app config.App) bool
 }
 
 type PullReport struct {
-	Updated        []string          `json:"updated"`
-	Skipped        map[string]string `json:"skipped,omitempty"`
-	RecipesAdded   []string          `json:"recipes_added,omitempty"`
-	ScriptsSkipped []string          `json:"scripts_skipped,omitempty"`
-	Unreachable    []string          `json:"unreachable,omitempty"`
+	Updated      []string          `json:"updated"`
+	Skipped      map[string]string `json:"skipped,omitempty"`
+	RecipesAdded []string          `json:"recipes_added,omitempty"`
+	// Declined are recipes that run code or add sources, which the user did not approve.
+	Declined    []string `json:"declined,omitempty"`
+	Unreachable []string `json:"unreachable,omitempty"`
+	// OwnRevision is the highest revision of this machine's node a peer still holds.
+	OwnRevision int `json:"own_revision,omitempty"`
 }
 
 // Pull takes newer node snapshots signed by machines paired directly, and recipes, from every found peer.
@@ -53,6 +56,8 @@ func Pull(ctx context.Context, o PullOptions) (PullReport, error) {
 
 		for _, e := range entries {
 			if e.ID == o.OwnID {
+				rep.OwnRevision = max(rep.OwnRevision, e.Revision)
+
 				continue
 			}
 
@@ -106,11 +111,12 @@ func pullNode(ctx context.Context, o PullOptions, addr string, e NodeEntry, have
 		return 0, err
 	}
 
-	return m.Revision, install(o.Root, e.ID, m.Revision, data, key)
+	return m.Revision, install(o, e.ID, m.Revision, data, key)
 }
 
 // install unpacks a node archive, checks it again, then swaps it in for the old copy.
-func install(root, id string, revision int, data []byte, key []byte) error {
+func install(o PullOptions, id string, revision int, data []byte, key []byte) error {
+	root := o.Root
 	dir := filepath.Join(root, node.Dir)
 
 	if err := os.MkdirAll(dir, 0o755); err != nil { // #nosec G301 -- config repo folders are world-readable, like git clones
@@ -146,8 +152,9 @@ func install(root, id string, revision int, data []byte, key []byte) error {
 		return err
 	}
 
-	if !safeName(n.Name) {
-		return fmt.Errorf("unsafe node name %q", n.Name)
+	// A name equal to this machine's name or to any node id could make it pass for another machine.
+	if !safeName(n.Name) || config.IsNodeID(n.Name) || n.Name == o.Settings.NodeName {
+		return fmt.Errorf("refused node name %q", n.Name)
 	}
 
 	target := filepath.Join(dir, n.Name)
@@ -234,19 +241,27 @@ func mergeRecipes(o PullOptions, data []byte, rep *PullReport) error {
 	}
 
 	var apps []config.App
+	repos := map[string]config.AptRepo{}
 
 	for _, app := range peer.Apps {
-		if newScript(app, local) && (o.ConfirmScript == nil || !o.ConfirmScript(app)) {
-			rep.ScriptsSkipped = append(rep.ScriptsSkipped, app.ID)
+		if needsConfirm(app, local) && (o.Confirm == nil || !o.Confirm(app)) {
+			rep.Declined = append(rep.Declined, app.ID)
 
 			continue
 		}
 
 		apps = append(apps, app)
+
+		for _, spec := range app.Install {
+			if r, ok := peer.AptRepos[spec.Repo]; ok && spec.Repo != "" {
+				repos[spec.Repo] = r
+			}
+		}
 	}
 
 	merged := existing
-	incoming := &config.Config{Version: peer.Version, Apps: apps, AptRepos: peer.AptRepos, AptKeys: peer.AptKeys, Capture: peer.Capture}
+	// Capture rules and legacy apt keys never come from peers: they could pull private files or trust any repo.
+	incoming := &config.Config{Version: peer.Version, Apps: apps, AptRepos: repos}
 
 	for _, key := range platformKeys(apps) {
 		out, report, err := config.Merge(merged, incoming, key)
@@ -268,8 +283,8 @@ func mergeRecipes(o PullOptions, data []byte, rep *PullReport) error {
 	return mergeRemovals(path, local, peer)
 }
 
-// newScript reports whether merging app would bring an install script this config does not have yet.
-func newScript(app config.App, local *config.Config) bool {
+// needsConfirm reports whether merging app brings a method that runs code or adds a source this config lacks.
+func needsConfirm(app config.App, local *config.Config) bool {
 	have, ok := local.App(app.ID)
 
 	if !ok && len(app.PostInstall) > 0 {
@@ -277,7 +292,7 @@ func newScript(app config.App, local *config.Config) bool {
 	}
 
 	for key, spec := range app.Install {
-		if spec.Script == "" {
+		if !risky(spec) {
 			continue
 		}
 
@@ -291,6 +306,11 @@ func newScript(app config.App, local *config.Config) bool {
 	}
 
 	return false
+}
+
+// risky install methods run a script, a downloaded package or a third-party source.
+func risky(spec config.InstallSpec) bool {
+	return spec.Script != "" || spec.DebURL != "" || spec.Tap != "" || spec.Repo != "" || spec.RemoteURL != ""
 }
 
 func platformKeys(apps []config.App) []string {

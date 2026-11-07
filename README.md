@@ -171,8 +171,11 @@ What is protected:
 - Pairing uses CPace: the code is never sent, a man in the middle cannot pair, and guesses are limited.
 - Each machine signs its own record; another machine can pass it on but cannot change or forge it, and your own
   record is never overwritten. Records are taken only from machines you paired with directly.
-- Peers only read. A recipe with an install script from another machine is shown and added only after you say yes.
+- Peers only read. A recipe from another machine that runs code or adds a source (a script, a `.deb` URL, a tap or a
+  repo) is shown and added only after you say yes; capture rules are never taken from a peer.
 - Secrets never travel: records hold only redacted files, and a record with a secret-looking value is not shared.
+
+The full threat model is in [SECURITY.md](SECURITY.md).
 
 Limits: both machines must be on at the same time (a git repo covers the rest); the default port is 7474
 (`lan.port` in `~/.config/rehome/settings.yml`), and `rehome serve` prints the firewall command when one blocks it.

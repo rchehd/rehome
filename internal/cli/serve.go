@@ -9,6 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/rchehd/rehome/internal/config"
 	"github.com/rchehd/rehome/internal/lan"
 	"github.com/rchehd/rehome/internal/ui"
 )
@@ -55,7 +56,12 @@ func newServeCmd() *cobra.Command {
 				out.Println()
 			}
 
-			if _, err := share(ctx, s, id, window, cmd.ErrOrStderr()); err != nil {
+			paired := func(p config.Peer) {
+				key, _ := lan.DecodeKey(p.Key)
+				out.Done(fmt.Sprintf("paired with %s, node %s, key %s", lan.Clean(p.Name), p.ID, lan.Fingerprint(key)))
+			}
+
+			if _, err := share(ctx, s, id, window, cmd.ErrOrStderr(), paired); err != nil {
 				return err
 			}
 

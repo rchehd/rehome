@@ -19,6 +19,7 @@ import (
 
 	"github.com/rchehd/rehome/internal/config"
 	"github.com/rchehd/rehome/internal/lan"
+	"github.com/rchehd/rehome/internal/node"
 	"github.com/rchehd/rehome/internal/tui"
 	"github.com/rchehd/rehome/internal/ui"
 )
@@ -72,6 +73,8 @@ func lanSettings() (config.Settings, error) {
 type pins struct {
 	mu sync.Mutex
 	s  config.Settings
+	// paired reports a machine that just paired, for serve to show.
+	paired func(config.Peer)
 }
 
 func (p *pins) trusted(key ed25519.PublicKey) bool {
@@ -97,10 +100,37 @@ func (p *pins) pin(peer config.Peer) error {
 		return err
 	}
 
+	if err := checkPin(fresh, peer); err != nil {
+		return err
+	}
+
 	fresh.Pin(peer)
 	p.s = fresh
 
-	return fresh.Save()
+	if err := fresh.Save(); err != nil {
+		return err
+	}
+
+	if p.paired != nil {
+		p.paired(peer)
+	}
+
+	return nil
+}
+
+// checkPin adds to the settings' checks that a node already recorded here keeps the key it was signed with.
+func checkPin(s config.Settings, peer config.Peer) error {
+	if err := s.CheckPin(peer); err != nil {
+		return err
+	}
+
+	nodes, _ := node.List(s.ClonePath)
+
+	if n := node.FindID(nodes, peer.ID); n != nil && n.Key != "" && n.Key != peer.Key {
+		return fmt.Errorf("node %s here was signed with another key; run rehome nodes forget %s first if that machine was reinstalled", lan.Clean(n.Name), n.Name)
+	}
+
+	return nil
 }
 
 func selfPeer(s config.Settings, id *lan.Identity) config.Peer {
@@ -108,14 +138,14 @@ func selfPeer(s config.Settings, id *lan.Identity) config.Peer {
 }
 
 // share serves this machine's config to paired peers and announces it until ctx ends.
-func share(ctx context.Context, s config.Settings, id *lan.Identity, window *lan.Window, log io.Writer) (*pins, error) {
+func share(ctx context.Context, s config.Settings, id *lan.Identity, window *lan.Window, log io.Writer, paired func(config.Peer)) (*pins, error) {
 	ln, err := net.Listen("tcp", fmt.Sprintf(":%d", s.LANPort()))
 
 	if err != nil {
 		return nil, fmt.Errorf("cannot listen on port %d: %w", s.LANPort(), err)
 	}
 
-	p := &pins{s: s}
+	p := &pins{s: s, paired: paired}
 	srv := &lan.Server{Root: s.ClonePath, Self: id, SelfPeer: selfPeer(s, id), Trusted: p.trusted, Window: window, OnPair: p.pin, Log: log}
 
 	go func() {
@@ -186,6 +216,10 @@ func linkLAN(cmd *cobra.Command, addr, code string) error {
 		return err
 	}
 
+	if err := checkPin(s, peer); err != nil {
+		return err
+	}
+
 	s.Pin(peer)
 
 	if manual && !slices.Contains(s.LAN.Peers, addr) {
@@ -197,7 +231,7 @@ func linkLAN(cmd *cobra.Command, addr, code string) error {
 	}
 
 	key, _ := lan.DecodeKey(peer.Key)
-	ui.New(cmd.OutOrStdout()).Done(fmt.Sprintf("paired with %s (key %s); rehome sync now pulls from it", peer.Name, lan.Fingerprint(key)))
+	ui.New(cmd.OutOrStdout()).Done(fmt.Sprintf("paired with %s, node %s, key %s; rehome sync now pulls from it", lan.Clean(peer.Name), peer.ID, lan.Fingerprint(key)))
 
 	return nil
 }
@@ -216,7 +250,7 @@ func pickPeer(cmd *cobra.Command, s config.Settings) (string, error) {
 	var choices []ui.Choice
 
 	for _, f := range found {
-		choices = append(choices, ui.Choice{Key: f.Addr, Label: strings.TrimSpace(f.Name + " " + f.Addr)})
+		choices = append(choices, ui.Choice{Key: f.Addr, Label: lan.Clean(strings.TrimSpace(f.Name + " " + f.Addr))})
 	}
 
 	addr, err := ui.Choose("Pair with which machine?", choices...)
