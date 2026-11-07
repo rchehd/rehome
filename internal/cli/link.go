@@ -14,11 +14,27 @@ import (
 )
 
 func newLinkCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "link <git-url|folder|archive.tar.gz>",
-		Short: "Link the place that holds your shared config: a private git repo, a folder or an archive",
-		Args:  cobra.ExactArgs(1),
+	var code string
+
+	cmd := &cobra.Command{
+		Use:   "link <git-url|folder|archive.tar.gz> | link lan [host:port]",
+		Short: "Link the place that holds your shared config: a private git repo, a folder or an archive, or pair over the LAN",
+		Args:  cobra.RangeArgs(1, 2),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if args[0] == "lan" {
+				addr := ""
+
+				if len(args) == 2 {
+					addr = args[1]
+				}
+
+				return linkLAN(cmd, addr, code)
+			}
+
+			if len(args) != 1 {
+				return fmt.Errorf("link takes one source")
+			}
+
 			ref := args[0]
 			kind := source.Kind(ref)
 			path, err := config.DefaultClonePath()
@@ -74,6 +90,9 @@ func newLinkCmd() *cobra.Command {
 			return nil
 		},
 	}
+	cmd.Flags().StringVar(&code, "code", "", "with link lan: the pairing code rehome serve --pair shows")
+
+	return cmd
 }
 
 func linkGit(cmd *cobra.Command, url, path string) error {

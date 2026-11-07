@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"maps"
@@ -13,15 +14,18 @@ import (
 	"github.com/rchehd/rehome/internal/app"
 	"github.com/rchehd/rehome/internal/config"
 	"github.com/rchehd/rehome/internal/install"
+	"github.com/rchehd/rehome/internal/lan"
 	"github.com/rchehd/rehome/internal/source"
+	"github.com/rchehd/rehome/internal/ui"
 )
 
 type syncReport struct {
 	Install *install.Report `json:"install,omitempty"`
 	// RemovedElsewhere are apps still here that another node removed everywhere.
-	RemovedElsewhere []string       `json:"removed_elsewhere"`
-	Scan             app.ScanReport `json:"scan"`
-	Published        bool           `json:"published"`
+	RemovedElsewhere []string        `json:"removed_elsewhere"`
+	Scan             app.ScanReport  `json:"scan"`
+	Published        bool            `json:"published"`
+	LAN              *lan.PullReport `json:"lan,omitempty"`
 }
 
 func newSyncCmd() *cobra.Command {
@@ -54,6 +58,19 @@ func newSyncCmd() *cobra.Command {
 			}
 
 			var out syncReport
+
+			if linked && len(s.LAN.Paired) > 0 && !flags.dryRun {
+				ctx, cancel := context.WithCancel(cmd.Context())
+				defer cancel()
+
+				rep, err := syncLAN(ctx, cmd, s, f.yes)
+
+				if err != nil {
+					return err
+				}
+
+				out.LAN = &rep
+			}
 
 			if !noApply {
 				rep, err := syncApply(cmd, f)
@@ -259,4 +276,88 @@ func completeApps(cmd *cobra.Command, args []string, toComplete string) ([]strin
 	}
 
 	return out, cobra.ShellCompDirectiveNoFileComp
+}
+
+// syncLAN shares this machine for the rest of the sync and pulls from every paired machine it finds.
+func syncLAN(ctx context.Context, cmd *cobra.Command, s config.Settings, yes bool) (lan.PullReport, error) {
+	id, err := lanIdentity()
+
+	if err != nil {
+		return lan.PullReport{}, err
+	}
+
+	p, err := share(ctx, s, id, nil, cmd.ErrOrStderr())
+
+	if err != nil {
+		cmd.PrintErrln("warning:", err, "— pulling without sharing")
+		p = &pins{s: s}
+	}
+
+	client := &lan.Client{Self: id, Trusted: p.trusted}
+	rep, err := lan.Pull(ctx, lan.PullOptions{Root: s.ClonePath, OwnID: s.NodeID, Client: client, Found: peers(ctx, s), Settings: s, ConfirmScript: func(a config.App) bool {
+		return confirmScript(cmd, a, yes)
+	}})
+
+	if err == nil && !flags.json {
+		printLAN(cmd, rep)
+	}
+
+	return rep, err
+}
+
+// confirmScript shows an install script a peer sent and asks before taking it.
+func confirmScript(cmd *cobra.Command, a config.App, yes bool) bool {
+	if yes || flags.json || !interactive() {
+		return false
+	}
+
+	var lines []ui.Item
+
+	for key, spec := range a.Install {
+		if spec.Script != "" {
+			lines = append(lines, ui.Item{Mark: ui.Attention, Text: key + ": " + spec.Script})
+		}
+	}
+
+	for _, c := range a.PostInstall {
+		lines = append(lines, ui.Item{Mark: ui.Attention, Text: "post install: " + c})
+	}
+
+	out := ui.New(cmd.OutOrStdout())
+	out.Section("Recipe "+a.ID+" from a paired machine runs", "")
+	out.List(lines...)
+
+	return confirm(cmd, "Add this recipe?", false)
+}
+
+func printLAN(cmd *cobra.Command, rep lan.PullReport) {
+	var items []ui.Item
+
+	if len(rep.Updated) > 0 {
+		items = append(items, ui.Item{Mark: ui.Add, Text: strings.Join(rep.Updated, ", "), Hint: "newer nodes taken"})
+	}
+
+	if len(rep.RecipesAdded) > 0 {
+		items = append(items, ui.Item{Mark: ui.Add, Text: strings.Join(slices.Compact(slices.Sorted(slices.Values(rep.RecipesAdded))), ", "), Hint: "recipes added"})
+	}
+
+	for _, name := range slices.Sorted(maps.Keys(rep.Skipped)) {
+		items = append(items, ui.Item{Mark: ui.Drop, Text: name, Hint: rep.Skipped[name]})
+	}
+
+	if len(rep.ScriptsSkipped) > 0 {
+		items = append(items, ui.Item{Mark: ui.Attention, Text: strings.Join(rep.ScriptsSkipped, ", "), Hint: "recipes with install scripts not taken"})
+	}
+
+	for _, u := range rep.Unreachable {
+		items = append(items, ui.Item{Mark: ui.Unknown, Text: u})
+	}
+
+	if len(items) == 0 {
+		items = append(items, ui.Item{Mark: ui.Plain, Text: ui.Muted("no paired machine found on the network")})
+	}
+
+	out := ui.New(cmd.OutOrStdout())
+	out.Section("LAN", "")
+	out.List(items...)
 }
