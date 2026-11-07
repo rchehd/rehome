@@ -109,7 +109,7 @@ func pullNode(ctx context.Context, o PullOptions, addr string, e NodeEntry, have
 	return m.Revision, install(o.Root, e.ID, m.Revision, data, key)
 }
 
-// install unpacks a node archive beside nodes/, checks it again, then swaps it in for the old copy.
+// install unpacks a node archive, checks it again, then swaps it in for the old copy.
 func install(root, id string, revision int, data []byte, key []byte) error {
 	dir := filepath.Join(root, node.Dir)
 
@@ -117,7 +117,8 @@ func install(root, id string, revision int, data []byte, key []byte) error {
 		return err
 	}
 
-	tmp, err := os.MkdirTemp(dir, ".lan-*")
+	// Beside nodes/, not in it, so listing nodes never takes the half-written copy for a node.
+	tmp, err := os.MkdirTemp(root, ".lan-*")
 
 	if err != nil {
 		return err
