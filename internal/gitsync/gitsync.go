@@ -20,8 +20,15 @@ func (g Git) Clone(ctx context.Context, url, path string) error {
 }
 
 // Pull rebases local commits onto the remote, keeping uncommitted changes aside meanwhile.
+// Pull rebases local commits onto the remote; a rebase stopped by a conflict is given up, so the clone stays as it was.
 func (g Git) Pull(ctx context.Context, path string) error {
-	return g.run(ctx, path, "pull", "--rebase", "--autostash")
+	if err := g.run(ctx, path, "pull", "--rebase", "--autostash"); err != nil {
+		g.AbortRebase(ctx, path)
+
+		return err
+	}
+
+	return nil
 }
 
 // Commit records every change in the repo, if there is any.
