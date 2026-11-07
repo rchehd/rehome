@@ -1,13 +1,17 @@
 package tui
 
-import "charm.land/lipgloss/v2"
+import (
+	"charm.land/lipgloss/v2"
+
+	"github.com/rchehd/rehome/internal/ui"
+)
 
 var (
-	titleStyle  = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("12"))
-	groupStyle  = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("13"))
+	titleStyle  = ui.TitleStyle
+	groupStyle  = ui.GroupStyle
 	cursorStyle = lipgloss.NewStyle().Reverse(true)
-	dimStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
-	helpStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("8")).Italic(true)
+	dimStyle    = ui.MutedStyle
+	helpStyle   = ui.HelpStyle
 
 	statusStyles = map[string]lipgloss.Style{
 		"missing":   lipgloss.NewStyle().Foreground(lipgloss.Color("11")),

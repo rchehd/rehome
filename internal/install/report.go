@@ -6,67 +6,98 @@ import (
 	"maps"
 	"slices"
 	"strings"
+
+	"github.com/rchehd/rehome/internal/ui"
 )
 
 // Print writes the human-readable end-of-run report.
 func (r *Report) Print(w io.Writer) {
-	fmt.Fprintf(w, "\ninstalled: %d, skipped: %d, failed: %d\n", len(r.Done), len(r.Skipped), len(r.Failed))
+	out := ui.New(w)
+
+	out.Println()
+	out.Println(ui.Bold(fmt.Sprintf("installed: %d, skipped: %d, failed: %d", len(r.Done), len(r.Skipped), len(r.Failed))))
+
+	var items []ui.Item
 
 	for _, o := range r.Failed {
-		fmt.Fprintf(w, "  ✗ %s: %s\n", o.ID, o.Reason)
+		item := ui.Item{Mark: ui.Fail, Text: o.ID + ": " + o.Reason}
 
 		if o.StderrTail != "" {
-			fmt.Fprintf(w, "      %s\n", strings.ReplaceAll(o.StderrTail, "\n", "\n      "))
+			item.Sub = strings.Split(o.StderrTail, "\n")
 		}
+
+		items = append(items, item)
 	}
 
 	for _, o := range r.Skipped {
 		if o.Reason != "" {
-			fmt.Fprintf(w, "  - %s: %s\n", o.ID, o.Reason)
+			items = append(items, ui.Item{Mark: ui.Drop, Text: o.ID + ": " + o.Reason})
 		}
 	}
 
 	for _, o := range r.Upgraded {
-		fmt.Fprintf(w, "  ↑ %s: %s\n", o.ID, o.Reason)
+		items = append(items, ui.Item{Mark: ui.Update, Text: o.ID + ": " + o.Reason})
 	}
+
+	out.List(items...)
 
 	if len(r.Upgradable) > 0 {
-		fmt.Fprintln(w, "older than on the other nodes (rehome install --upgrade):")
+		out.Section("Older than on the other nodes", "rehome install --upgrade")
+
+		items = nil
 
 		for _, o := range r.Upgradable {
-			fmt.Fprintf(w, "  %s: %s\n", o.ID, o.Reason)
+			items = append(items, ui.Item{Mark: ui.Plain, Text: o.ID + ": " + o.Reason})
 		}
+
+		out.List(items...)
 	}
+
+	items = nil
 
 	for _, n := range r.VersionNotes {
-		fmt.Fprintf(w, "version: %s\n", n)
+		items = append(items, ui.Item{Mark: ui.Plain, Text: "version: " + n})
 	}
 
+	out.List(items...)
+
 	if len(r.KeptLocal) > 0 {
-		fmt.Fprintln(w, "settings kept as they are (differ from the config; use --overwrite-files to replace):")
+		out.Section("Kept", "settings kept as they are (differ from the config; use --overwrite-files to replace)")
+
+		items = nil
 
 		for _, k := range r.KeptLocal {
-			fmt.Fprintf(w, "  %s\n", k.Dest)
+			items = append(items, ui.Item{Mark: ui.Plain, Text: k.Dest})
 		}
+
+		out.List(items...)
 	}
 
 	if len(r.ManualSecrets) > 0 {
-		fmt.Fprintln(w, "fill in secrets by hand:")
+		out.Section("Secrets", "fill in secrets by hand")
+
+		items = nil
 
 		for _, s := range r.ManualSecrets {
-			fmt.Fprintf(w, "  %s\n", s)
+			items = append(items, ui.Item{Mark: ui.Plain, Text: s})
 		}
+
+		out.List(items...)
 	}
 
-	r.printSources(w)
+	r.printSources(out)
+
+	items = nil
 
 	for _, n := range r.Notes {
-		fmt.Fprintf(w, "note: %s\n", n)
+		items = append(items, ui.Item{Mark: ui.Plain, Text: "note: " + n})
 	}
+
+	out.List(items...)
 }
 
 // printSources lists the installed apps by the node they came from, then what was left out and why.
-func (r *Report) printSources(w io.Writer) {
+func (r *Report) printSources(out *ui.Out) {
 	byNode := map[string][]string{}
 
 	for id, from := range r.TakenFrom {
@@ -74,16 +105,19 @@ func (r *Report) printSources(w io.Writer) {
 	}
 
 	if len(byNode) > 0 {
-		fmt.Fprintln(w, "taken from:")
+		var rows [][]string
 
 		for _, n := range slices.Sorted(maps.Keys(byNode)) {
 			slices.Sort(byNode[n])
-			fmt.Fprintf(w, "  %s: %s\n", n, strings.Join(byNode[n], ", "))
+			rows = append(rows, []string{n, strings.Join(byNode[n], ", ")})
 		}
+
+		out.Section("Taken from", "")
+		out.Table(nil, rows)
 	}
 
 	if len(r.LeftOut) > 0 {
-		fmt.Fprintln(w, "left out:")
+		var items []ui.Item
 
 		for _, c := range r.LeftOut {
 			on := ""
@@ -92,7 +126,10 @@ func (r *Report) printSources(w io.Writer) {
 				on = " (on " + c.Node + ")"
 			}
 
-			fmt.Fprintf(w, "  %s: %s%s\n", c.ID, c.Reason, on)
+			items = append(items, ui.Item{Mark: ui.Drop, Text: c.ID + ": " + c.Reason + on})
 		}
+
+		out.Section("Left out", "")
+		out.List(items...)
 	}
 }

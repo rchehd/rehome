@@ -11,6 +11,7 @@ import (
 	"github.com/rchehd/rehome/internal/config"
 	"github.com/rchehd/rehome/internal/migrate"
 	"github.com/rchehd/rehome/internal/source"
+	"github.com/rchehd/rehome/internal/ui"
 )
 
 func newMigrateCmd() *cobra.Command {
@@ -27,6 +28,7 @@ func newMigrateCmd() *cobra.Command {
 // runMigrate pulls first, so a config another machine already migrated is only reused.
 func runMigrate(cmd *cobra.Command) error {
 	ctx := cmd.Context()
+	out := ui.New(cmd.OutOrStdout())
 	root, err := config.ResolveRoot(flags.config)
 
 	if err != nil {
@@ -57,7 +59,7 @@ func runMigrate(cmd *cobra.Command) error {
 	}
 
 	if v >= config.CurrentVersion {
-		cmd.Println("the config is already up to date; rehome scan adds this machine as a node")
+		out.Done("the config is already up to date; rehome scan adds this machine as a node")
 
 		return nil
 	}
@@ -75,7 +77,7 @@ func runMigrate(cmd *cobra.Command) error {
 			return fmt.Errorf("backup: %w", err)
 		}
 
-		cmd.Printf("backup: %s\n", where)
+		out.Printf("backup: %s\n", where)
 	}
 
 	actions, err := migrate.Run(root, self, flags.dryRun, installedHere(cmd))
@@ -84,15 +86,19 @@ func runMigrate(cmd *cobra.Command) error {
 		return err
 	}
 
-	verb := "done"
+	mark, verb := ui.Done, "done"
 
 	if flags.dryRun {
-		verb = "would"
+		mark, verb = ui.Plain, "would"
 	}
 
+	var items []ui.Item
+
 	for _, a := range actions {
-		cmd.Printf("  %s: %s\n", verb, a)
+		items = append(items, ui.Item{Mark: mark, Text: verb + ": " + a})
 	}
+
+	out.List(items...)
 
 	if flags.dryRun {
 		return nil
@@ -108,7 +114,7 @@ func runMigrate(cmd *cobra.Command) error {
 		}
 	}
 
-	cmd.Printf("migrated to v%d as node %s; run rehome scan to refresh it\n", config.CurrentVersion, self.Name)
+	out.Done(fmt.Sprintf("migrated to v%d as node %s; run rehome scan to refresh it", config.CurrentVersion, self.Name))
 
 	return nil
 }

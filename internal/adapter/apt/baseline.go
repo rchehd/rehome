@@ -259,5 +259,5 @@ func baselineWarning(installed map[string]string) string {
 		return ""
 	}
 
-	return "installer package snapshot is unavailable and no desktop/server metapackage is installed; base-system packages are taken from the desktop metapackage in the apt index, others may appear as new"
+	return "no installer snapshot and no desktop metapackage: the base system is taken from ubuntu-desktop in the apt index"
 }

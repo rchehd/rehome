@@ -111,7 +111,7 @@ func offerMCPInstall(cmd *cobra.Command) error {
 
 	cmd.Println("Connect rehome via MCP to " + strings.Join(clients, ", ") + "?")
 
-	if ask(cmd, "Add rehome to these agents' user settings? [y/N]", "n") != "y" {
+	if !confirm(cmd, "Add rehome to these agents' user settings?", false) {
 		return nil
 	}
 

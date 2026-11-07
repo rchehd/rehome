@@ -10,6 +10,7 @@ import (
 	"github.com/rchehd/rehome/internal/config"
 	"github.com/rchehd/rehome/internal/gitsync"
 	"github.com/rchehd/rehome/internal/source"
+	"github.com/rchehd/rehome/internal/ui"
 )
 
 func newLinkCmd() *cobra.Command {
@@ -68,7 +69,7 @@ func newLinkCmd() *cobra.Command {
 				return err
 			}
 
-			cmd.Printf("linked %s (%s) → %s\n", ref, kind, path)
+			ui.New(cmd.OutOrStdout()).Done(fmt.Sprintf("linked %s (%s) → %s", ref, kind, path))
 
 			return nil
 		},

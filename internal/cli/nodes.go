@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"text/tabwriter"
+	"strconv"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -12,6 +12,7 @@ import (
 	"github.com/rchehd/rehome/internal/app"
 	"github.com/rchehd/rehome/internal/config"
 	"github.com/rchehd/rehome/internal/node"
+	"github.com/rchehd/rehome/internal/ui"
 )
 
 type nodeRow struct {
@@ -60,8 +61,7 @@ func newNodesCmd() *cobra.Command {
 				return nil
 			}
 
-			tw := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 0, 3, ' ', 0)
-			fmt.Fprintln(tw, "NODE\tSYSTEM\tAPPS\tLAST SEEN\t")
+			var table [][]string
 
 			for _, r := range rows {
 				note := ""
@@ -73,10 +73,12 @@ func newNodesCmd() *cobra.Command {
 					note = "stale"
 				}
 
-				fmt.Fprintf(tw, "%s\t%s\t%d\t%s\t%s\n", r.Name, r.System, r.Apps, seen(r.LastSeen, now), note)
+				table = append(table, []string{r.Name, r.System, strconv.Itoa(r.Apps), seen(r.LastSeen, now), note})
 			}
 
-			return tw.Flush()
+			ui.New(cmd.OutOrStdout()).Table([]string{"NODE", "SYSTEM", "APPS", "LAST SEEN", ""}, table)
+
+			return nil
 		},
 	}
 	cmd.Flags().BoolVar(&stale, "stale", false, "show only nodes that have not pushed for a long time")
@@ -111,7 +113,7 @@ func newNodesRenameCmd() *cobra.Command {
 			dir := node.DirOf(w.Root, name)
 
 			if flags.dryRun {
-				cmd.Printf("would rename %s to %s\n", n.Name, name)
+				ui.New(cmd.OutOrStdout()).Printf("would rename %s to %s\n", n.Name, name)
 
 				return nil
 			}
@@ -138,7 +140,7 @@ func newNodesRenameCmd() *cobra.Command {
 				}
 			}
 
-			cmd.Printf("renamed to %s; rehome push shares it\n", name)
+			ui.New(cmd.OutOrStdout()).Done(fmt.Sprintf("renamed to %s; rehome push shares it", name))
 
 			return nil
 		},
@@ -165,7 +167,7 @@ func newNodesForgetCmd() *cobra.Command {
 			}
 
 			if flags.dryRun {
-				cmd.Printf("would remove %s\n", n.Path)
+				ui.New(cmd.OutOrStdout()).Printf("would remove %s\n", n.Path)
 
 				return nil
 			}
@@ -175,7 +177,7 @@ func newNodesForgetCmd() *cobra.Command {
 					return errors.New("use --yes in non-interactive mode")
 				}
 
-				if ask(cmd, fmt.Sprintf("Remove node %s with its %d apps and settings? [y/N]", n.Name, len(n.Apps)), "n") != "y" {
+				if !confirm(cmd, fmt.Sprintf("Remove node %s with its %d apps and settings?", n.Name, len(n.Apps)), false) {
 					cmd.Println("nothing removed")
 
 					return nil
@@ -186,7 +188,7 @@ func newNodesForgetCmd() *cobra.Command {
 				return err
 			}
 
-			cmd.Printf("removed %s; rehome push shares it\n", n.Name)
+			ui.New(cmd.OutOrStdout()).Done(fmt.Sprintf("removed %s; rehome push shares it", n.Name))
 
 			return nil
 		},

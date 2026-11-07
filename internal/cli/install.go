@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"slices"
 	"time"
@@ -18,6 +19,7 @@ import (
 	"github.com/rchehd/rehome/internal/secrets"
 	"github.com/rchehd/rehome/internal/sessions"
 	"github.com/rchehd/rehome/internal/tui"
+	"github.com/rchehd/rehome/internal/ui"
 )
 
 type installFlags struct {
@@ -375,7 +377,7 @@ func liftTombstones(cmd *cobra.Command, in *app.InstallInput, rep *install.Repor
 			return err
 		}
 
-		cmd.Printf("%s is no longer marked removed everywhere (%s removed it on %s)\n", o.ID, t.By, t.At.Format(time.DateOnly))
+		ui.New(cmd.OutOrStdout()).Done(fmt.Sprintf("%s is no longer marked removed everywhere (%s removed it on %s)", o.ID, t.By, t.At.Format(time.DateOnly)))
 	}
 
 	return nil
@@ -393,7 +395,7 @@ func offerPush(cmd *cobra.Command, f installFlags) error {
 		return err
 	}
 
-	if !f.push && (f.yes || !interactive() || ask(cmd, "Publish this node's new versions to the shared config? [y/N]", "n") != "y") {
+	if !f.push && (f.yes || !interactive() || !confirm(cmd, "Publish this node's new versions to the shared config?", false)) {
 		return nil
 	}
 
@@ -470,13 +472,17 @@ func installMode(f installFlags, lk *lock.Lock) (string, error) {
 }
 
 func printPlan(cmd *cobra.Command, plan *install.Plan) {
+	out := ui.New(cmd.OutOrStdout())
 	c := plan.Counts()
-	cmd.Printf("to install: %d, settings only: %d, already installed: %d, unavailable: %d, disabled: %d, ignored: %d\n",
-		c[install.StatusInstall], c[install.StatusFilesOnly], c[install.StatusInstalled], c[install.StatusUnavailable], c[install.StatusDisabled], c[install.StatusIgnored])
+
+	out.Section("Plan", fmt.Sprintf("to install: %d, settings only: %d, already installed: %d, unavailable: %d, disabled: %d, ignored: %d",
+		c[install.StatusInstall], c[install.StatusFilesOnly], c[install.StatusInstalled], c[install.StatusUnavailable], c[install.StatusDisabled], c[install.StatusIgnored]))
+
+	var items []ui.Item
 
 	for _, s := range plan.Steps {
 		if s.Status == install.StatusUnavailable {
-			cmd.Printf("  - %-28s %s\n", s.App.ID, s.Reason)
+			items = append(items, ui.Item{Mark: ui.Drop, Text: fmt.Sprintf("%-28s %s", s.App.ID, s.Reason)})
 		}
 
 		if s.Status == install.StatusInstall {
@@ -499,26 +505,31 @@ func printPlan(cmd *cobra.Command, plan *install.Plan) {
 				version += " from " + from
 			}
 
-			cmd.Printf("  + %-28s %s %s%s\n", s.App.ID, name, pkg, version)
+			items = append(items, ui.Item{Mark: ui.Add, Text: fmt.Sprintf("%-28s %s %s%s", s.App.ID, name, pkg, version)})
 		}
 	}
 
 	for _, c := range plan.Skipped {
-		cmd.Printf("  - %-28s %s (on %s)\n", c.ID, c.Reason, c.Node)
+		items = append(items, ui.Item{Mark: ui.Drop, Text: fmt.Sprintf("%-28s %s (on %s)", c.ID, c.Reason, c.Node)})
 	}
 
 	for _, s := range plan.Steps {
 		if s.Upgrade != (lock.Entry{}) {
-			cmd.Printf("  ↑ %-28s %s → %s (only with --upgrade or u in the checklist)\n", s.App.ID, s.Installed, pinLabel(s.Upgrade))
+			items = append(items, ui.Item{Mark: ui.Update, Text: fmt.Sprintf("%-28s %s → %s (only with --upgrade or u in the checklist)", s.App.ID, s.Installed, pinLabel(s.Upgrade))})
 		}
 	}
 
+	out.List(items...)
+
 	if cmds := plan.Commands(); len(cmds) > 0 {
-		cmd.Println("commands that will run:")
+		items = nil
 
 		for _, c := range cmds {
-			cmd.Println("  $ " + c)
+			items = append(items, ui.Item{Mark: ui.Plain, Text: "$ " + c})
 		}
+
+		out.Section("Commands that will run", "")
+		out.List(items...)
 	}
 }
 
@@ -531,14 +542,17 @@ func exitCode(report *install.Report) error {
 }
 
 func executePlan(cmd *cobra.Command, plan *install.Plan, opts install.Options) (*install.Report, error) {
+	out := ui.New(cmd.ErrOrStderr())
+	step := ui.Paint(ui.Step, string(ui.Step))
+
 	return install.Execute(cmd.Context(), newRunner(), plan, opts, func(e install.Event) {
 		switch {
 		case e.Total > 0:
-			cmd.PrintErrf("» [%d/%d] %s %s\n", e.Index, e.Total, e.Phase, e.ID)
+			out.Printf("%s [%d/%d] %s %s\n", step, e.Index, e.Total, e.Phase, e.ID)
 		case e.ID != "":
-			cmd.PrintErrf("» %s %s\n", e.Phase, e.ID)
+			out.Printf("%s %s %s\n", step, e.Phase, e.ID)
 		default:
-			cmd.PrintErrf("» %s\n", e.Phase)
+			out.Printf("%s %s\n", step, e.Phase)
 		}
 	})
 }

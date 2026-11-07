@@ -1,11 +1,15 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 
+	"charm.land/fang/v2"
+	"github.com/mattn/go-isatty"
 	"github.com/spf13/cobra"
 
 	"github.com/rchehd/rehome/internal/app"
@@ -104,12 +108,12 @@ func newRunner() *runner.Runner {
 // Execute runs the CLI and returns the process exit code.
 func Execute() int {
 	root := newRoot()
-	err := root.Execute()
+	err := fang.Execute(context.Background(), root, fang.WithVersion(Version), fang.WithoutManpage(), fang.WithErrorHandler(printError))
 
-	if errors.Is(err, config.ErrNeedsMigration) && interactive() && !flags.json {
+	if offerMigration(err) {
 		fmt.Fprintln(os.Stderr, "This config uses the previous format.")
 
-		if ask(root, "Migrate it now? [Y/n]", "y") == "y" {
+		if confirm(root, "Migrate it now?", true) {
 			if err = runMigrate(root); err == nil {
 				fmt.Fprintln(os.Stderr, "Done; run the command again.")
 
@@ -128,7 +132,26 @@ func Execute() int {
 		return exit.Code
 	}
 
-	fmt.Fprintln(os.Stderr, "error:", err)
-
 	return 1
+}
+
+func offerMigration(err error) bool {
+	return errors.Is(err, config.ErrNeedsMigration) && interactive() && !flags.json
+}
+
+// printError styles errors in a terminal and keeps them on one plain line in logs.
+func printError(w io.Writer, styles fang.Styles, err error) {
+	var exit ExitError
+
+	if errors.As(err, &exit) || offerMigration(err) {
+		return
+	}
+
+	if !isatty.IsTerminal(os.Stderr.Fd()) {
+		fmt.Fprintln(os.Stderr, "error:", err)
+
+		return
+	}
+
+	fang.DefaultErrorHandler(w, styles, err)
 }

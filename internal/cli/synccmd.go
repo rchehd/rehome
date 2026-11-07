@@ -167,7 +167,7 @@ func syncRemovals(cmd *cobra.Command, yes bool) ([]string, error) {
 			continue
 		}
 
-		if ask(cmd, about+". Remove it here? [y/N]", "n") != "y" {
+		if !confirm(cmd, about+". Remove it here?", false) {
 			continue
 		}
 
