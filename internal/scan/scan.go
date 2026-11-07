@@ -128,6 +128,7 @@ func Run(ctx context.Context, r *runner.Runner, p platform.Platform, cat *catalo
 		}
 	}
 
+	s.addScriptRecipes()
 	progress.Step(ctx, "looking for installed tools")
 	bins, err := binaries.Resolve(ctx, r, cat, known)
 
@@ -229,6 +230,27 @@ func (s *scanner) add(d adapter.Detected) {
 	}
 
 	s.apps[app.ID] = app
+}
+
+// addScriptRecipes records the user's own script recipes whose binary is here; no package manager reports them.
+func (s *scanner) addScriptRecipes() {
+	for _, app := range s.existing.Apps {
+		spec, ok := app.Spec(s.p.Key())
+
+		if !ok || spec.Script == "" || spec.Bin == "" || s.res.SkipMissing[app.ID] {
+			continue
+		}
+
+		if _, known := s.cat.Get(app.ID); known {
+			continue
+		}
+
+		if _, have := s.apps[app.ID]; have || !adapter.BinExists(spec.Bin) {
+			continue
+		}
+
+		s.apps[app.ID] = &config.App{ID: app.ID, Group: app.Group, Install: maps.Clone(app.Install), Requires: app.Requires, PostInstall: app.PostInstall, Files: app.Files}
+	}
 }
 
 // recipeFor finds the user's recipe for a package installed without a repo, e.g. a .deb or a dropped source.
