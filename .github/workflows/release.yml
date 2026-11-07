@@ -23,3 +23,5 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # A release and an earlier rc may tag the same commit; release the pushed tag.
+          GORELEASER_CURRENT_TAG: ${{ github.ref_name }}
