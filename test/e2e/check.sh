@@ -144,7 +144,7 @@ else
 fi
 
 echo "== LAN"
-if as_dev "bash -x /e2e/lan.sh /home/dev/rehome 2>&1 | tail -n 60; test \${PIPESTATUS[0]} -eq 0"; then
+if as_dev "bash /e2e/lan.sh /home/dev/rehome"; then
   pass "pair over the LAN with a code, take a newer signed node, refuse an unpaired machine"
 else
   fail "pair over the LAN with a code, take a newer signed node, refuse an unpaired machine"

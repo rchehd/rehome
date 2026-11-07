@@ -11,10 +11,10 @@ trap 'echo "LAN E2E failed at line $LINENO" >&2; tail -n 25 "$work"/*.log >&2 2>
 
 unset XDG_CURRENT_DESKTOP DBUS_SESSION_BUS_ADDRESS WSL_DISTRO_NAME WSL_INTEROP
 
-# home NAME PORT: a home with its own settings, node id, LAN port and config folder.
+# home NAME PORT PEER: a home with its own settings, node id, LAN port, a peer address and config folder.
 home() {
   mkdir -p "$work/$1/home" "$work/$1/config/rehome" "$work/$1/data"
-  printf 'node_id: %s\nnode_name: %s\nclone_path: %s\nlan:\n  port: %s\n' "$(printf "$1%.0s" {1..32})" "$1" "$work/$1/clone" "$2" > "$work/$1/config/rehome/settings.yml"
+  printf 'node_id: %s\nnode_name: %s\nclone_path: %s\nlan:\n  port: %s\n  peers: [%s]\n' "$(printf "$1%.0s" {1..32})" "$1" "$work/$1/clone" "$2" "$3" > "$work/$1/config/rehome/settings.yml"
   mkdir -p "$work/$1/clone"
   printf 'version: 2\napps: []\n' > "$work/$1/clone/rehome.yml"
 }
@@ -25,9 +25,9 @@ as() {
   HOME="$work/$name/home" XDG_CONFIG_HOME="$work/$name/config" XDG_DATA_HOME="$work/$name/data" XDG_STATE_HOME="$work/$name/state" "$rehome" "$@"
 }
 
-home a 17474
-home b 17475
-home c 17476
+home a 17474 127.0.0.1:17475
+home b 17475 127.0.0.1:17474
+home c 17476 127.0.0.1:17474
 
 # a shares with pairing open; the code is read from its log.
 as a serve --pair --for 2m > "$work/a-serve.log" 2>&1 &
@@ -63,7 +63,6 @@ as b sync --yes --no-apply --no-push > "$work/b-sync.log" 2>&1
 first="$(grep '^revision:' "$work/b/clone/nodes/a/node.yml")"
 kill "${pids[@]}" 2>/dev/null || true
 wait 2>/dev/null || true
-sed -i 's/^lan:$/lan:\n  peers: [127.0.0.1:17475]/' "$work/a/config/rehome/settings.yml"
 
 # a renames itself, which saves its node with a higher revision; then both sync at once and each takes the other.
 as a nodes rename a a2 --config "$work/a/clone" > "$work/a-rename.log" 2>&1
